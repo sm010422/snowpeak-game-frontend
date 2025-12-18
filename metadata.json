@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Snowpeak Game - Multiplayer Co-op",
+  "description": "A cozy real-time multiplayer camping and cafe simulation game built with React, Phaser 3, and WebSockets.",
+  "requestFramePermissions": []
+}
