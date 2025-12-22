@@ -20,6 +20,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
       parent: gameRef.current,
       width: window.innerWidth,
       height: window.innerHeight,
+      pixelArt: true, // Keep things sharp
       physics: {
         default: 'arcade',
         arcade: {
@@ -28,7 +29,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         },
       },
       scene: [MainScene],
-      backgroundColor: '#2d3436',
+      backgroundColor: '#0b0e14',
     };
 
     phaserGame.current = new Phaser.Game(config);
@@ -57,7 +58,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     };
   }, [nickname, role]);
 
-  return <div ref={gameRef} className="w-full h-screen" />;
+  return <div ref={gameRef} className="w-full h-screen overflow-hidden" />;
 };
 
 export default GameContainer;
