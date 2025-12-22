@@ -1,26 +1,28 @@
 
 export type PlayerRole = 'HALL_SERVER' | 'BARISTA';
+export type AnimState = 'IDLE' | 'WALK';
 
 export interface PlayerState {
-  id: string;
+  playerId: string;
   nickname: string;
-  role: PlayerRole;
   x: number;
   y: number;
-  lastUpdate: number;
+  direction: string;
+  role: PlayerRole;
+  animState: AnimState;
+  roomId: string;
 }
 
 export interface GameMessage {
   type: 'JOIN' | 'MOVE' | 'LEAVE' | 'CHAT';
   playerId: string;
   nickname?: string;
-  role?: PlayerRole;
+  role?: PlayerRole | string;
   x?: number;
   y?: number;
   content?: string;
-}
-
-export interface SocketEvent {
-  type: string;
-  data: any;
+  // 백엔드 PlayerState와 호환을 위한 필드들
+  direction?: string;
+  animState?: AnimState;
+  roomId?: string;
 }

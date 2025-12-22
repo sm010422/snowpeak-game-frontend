@@ -18,8 +18,8 @@ class SocketService {
   }
 
   public connect(nickname: string, role: string, onConnected: () => void, onError: (err: any) => void) {
-    // 백엔드 서버 주소를 http://localhost:8080/ws 로 설정 (표준적인 WebSocket 경로)
-    const socket = new SockJS('http://localhost:8080/ws');
+    // 백엔드 WebSocketConfig의 registry.addEndpoint("/ws-snowpeak")에 맞춤
+    const socket = new SockJS('http://localhost:8080/ws-snowpeak');
     
     this.client = new Client({
       webSocketFactory: () => socket,
@@ -30,23 +30,34 @@ class SocketService {
     });
 
     this.client.onConnect = (frame) => {
-      console.log('Connected to Snowpeak Backend: ' + frame);
+      console.log('Connected to Snowpeak Backend');
       
-      // 게임방 구독 (예시: room.1)
+      // 방 구독 (백엔드 destination: /topic/room.1)
       this.client?.subscribe('/topic/room.1', (message: Message) => {
         try {
-          const payload: GameMessage = JSON.parse(message.body);
+          const payload = JSON.parse(message.body);
+          // 백엔드에서 PlayerState 객체가 바로 넘어오므로 적절히 처리
           this.notifySubscribers(payload);
         } catch (e) {
           console.error('Failed to parse message', e);
         }
       });
 
-      // 초기 참여 메시지 전송
+      // 개인 큐 구독 (기존 플레이어 정보 수신용)
+      this.client?.subscribe('/user/queue/players', (message: Message) => {
+        try {
+          const payload = JSON.parse(message.body);
+          this.notifySubscribers(payload);
+        } catch (e) {
+          console.error('Failed to parse user queue message', e);
+        }
+      });
+
+      // JOIN 메시지 전송 (백엔드 @MessageMapping("/join"))
       this.sendMessage('/app/join', {
         type: 'JOIN',
         nickname,
-        role,
+        role: role.toUpperCase(),
         x: 400,
         y: 300
       });
@@ -55,12 +66,7 @@ class SocketService {
     };
 
     this.client.onStompError = (frame) => {
-      console.error('Broker reported error: ' + frame.headers['message']);
       onError(frame.headers['message']);
-    };
-
-    this.client.onWebSocketClose = () => {
-      console.warn('WebSocket Connection Closed');
     };
 
     this.client.activate();
@@ -78,19 +84,17 @@ class SocketService {
         destination,
         body: JSON.stringify(body),
       });
-    } else {
-      console.warn('Cannot send message: Not connected to server');
     }
   }
 
-  public subscribe(callback: (msg: GameMessage) => void) {
+  public subscribe(callback: (msg: any) => void) {
     this.subscribers.push(callback);
     return () => {
       this.subscribers = this.subscribers.filter(s => s !== callback);
     };
   }
 
-  private notifySubscribers(msg: GameMessage) {
+  private notifySubscribers(msg: any) {
     this.subscribers.forEach(callback => callback(msg));
   }
 }

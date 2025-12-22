@@ -1,10 +1,9 @@
 
 import Phaser from 'phaser';
 import { socketService } from '../services/SocketService';
-import { GameMessage } from '../types';
+import { GameMessage, PlayerState } from '../types';
 
 export class MainScene extends Phaser.Scene {
-  // Phaser 내부 시스템 객체들을 명시적으로 선언
   public declare add: Phaser.GameObjects.GameObjectFactory;
   public declare cameras: Phaser.Cameras.Scene2D.CameraManager;
   public declare input: Phaser.Input.InputPlugin;
@@ -14,7 +13,6 @@ export class MainScene extends Phaser.Scene {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys | null = null;
   private wasd: { [key: string]: Phaser.Input.Keyboard.Key } | null = null;
   
-  private myId: string = Math.random().toString(36).substring(7);
   private myNickname: string = '';
   private myRole: string = '';
   
@@ -32,33 +30,28 @@ export class MainScene extends Phaser.Scene {
   }
 
   create() {
-    // 배경 설정
     const floor = this.add.graphics();
     floor.fillStyle(0x8b7355, 1);
     floor.fillRect(0, 0, 2000, 2000);
     
     this.add.grid(1000, 1000, 2000, 2000, 64, 64, 0x000000, 0, 0x5d4037, 0.2);
 
-    // 내 캐릭터 생성
     this.me = this.createPlayerSprite(400, 300, this.myNickname, true);
     this.cameras.main.startFollow(this.me, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, 2000, 2000);
 
-    // 입력 설정
     if (this.input && this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys('W,A,S,D') as any;
     }
 
-    // 소켓 구독
-    socketService.subscribe((msg: GameMessage) => {
+    socketService.subscribe((msg: any) => {
       this.handleServerUpdate(msg);
     });
   }
 
   private createPlayerSprite(x: number, y: number, name: string, isMe: boolean): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
-    
     const body = this.add.graphics();
     const color = isMe ? 0x4ade80 : 0xf87171;
     body.fillStyle(color, 1);
@@ -77,28 +70,18 @@ export class MainScene extends Phaser.Scene {
     return container;
   }
 
-  handleServerUpdate(msg: GameMessage) {
-    if (msg.playerId === this.myId) return;
+  handleServerUpdate(data: any) {
+    // 백엔드에서 온 데이터가 PlayerState DTO 구조라고 가정 (playerId 필드 확인)
+    const pid = data.playerId || data.nickname; 
+    if (!pid || pid === this.myNickname) return;
 
-    switch (msg.type) {
-      case 'JOIN':
-      case 'MOVE':
-        if (!this.otherPlayers.has(msg.playerId)) {
-          const newPlayer = this.createPlayerSprite(msg.x || 0, msg.y || 0, msg.nickname || 'Guest', false);
-          this.otherPlayers.set(msg.playerId, newPlayer);
-        }
-        if (msg.x !== undefined && msg.y !== undefined) {
-          this.targetPositions.set(msg.playerId, { x: msg.x, y: msg.y });
-        }
-        break;
-      case 'LEAVE':
-        const player = this.otherPlayers.get(msg.playerId);
-        if (player) {
-          player.destroy();
-          this.otherPlayers.delete(msg.playerId);
-          this.targetPositions.delete(msg.playerId);
-        }
-        break;
+    if (!this.otherPlayers.has(pid)) {
+      const newPlayer = this.createPlayerSprite(data.x || 0, data.y || 0, data.nickname || 'Guest', false);
+      this.otherPlayers.set(pid, newPlayer);
+    }
+    
+    if (data.x !== undefined && data.y !== undefined) {
+      this.targetPositions.set(pid, { x: data.x, y: data.y });
     }
   }
 
@@ -119,11 +102,17 @@ export class MainScene extends Phaser.Scene {
 
     const dist = Phaser.Math.Distance.Between(this.me.x, this.me.y, this.lastSentPos.x, this.lastSentPos.y);
     if (dist > this.moveThreshold) {
-      socketService.sendMessage('/app/move', {
-        type: 'MOVE',
-        playerId: this.myId,
+      // 백엔드 @MessageMapping("/update") 경로 사용
+      // 백엔드 PlayerState DTO 구조에 맞춘 데이터 전송
+      socketService.sendMessage('/app/update', {
+        playerId: this.myNickname, // 백엔드 로직상 닉네임을 ID로 쓰는 경우가 많음
+        nickname: this.myNickname,
         x: Math.round(this.me.x),
-        y: Math.round(this.me.y)
+        y: Math.round(this.me.y),
+        direction: vx > 0 ? "right" : vx < 0 ? "left" : "down",
+        role: this.myRole.toUpperCase(),
+        animState: (vx !== 0 || vy !== 0) ? "WALK" : "IDLE",
+        roomId: "1"
       });
       this.lastSentPos = { x: this.me.x, y: this.me.y };
     }
