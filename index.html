@@ -4,37 +4,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Snowpeak Game</title>
-    <!-- sockjs-client가 내부적으로 global 변수를 참조하기 때문에 브라우저에서 선언해줍니다. -->
+    <title>Snowpeak Game 3D</title>
     <script>
-      if (typeof global === 'undefined') {
-        window.global = window;
-      }
-      // 일부 라이브러리 호환성을 위해 process 객체도 최소한으로 정의합니다.
-      if (typeof process === 'undefined') {
-        window.process = { env: {} };
-      }
+      if (typeof global === 'undefined') { window.global = window; }
+      if (typeof process === 'undefined') { window.process = { env: {} }; }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background-color: #f3f4f6;
-        font-family: 'Inter', sans-serif;
-      }
-      canvas {
-        display: block;
-      }
+      body { margin: 0; padding: 0; overflow: hidden; background-color: #f3f4f6; font-family: 'Inter', sans-serif; }
       #root:empty::before {
-        content: 'Loading Snowpeak...';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: #5d4037;
-        font-weight: bold;
+        content: 'Building 3D World...';
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        color: #5d4037; font-weight: bold;
       }
     </style>
     <script type="importmap">
@@ -44,11 +25,12 @@
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "lucide-react": "https://esm.sh/lucide-react@0.460.0",
-    "phaser": "https://esm.sh/phaser@3.87.0",
+    "three": "https://esm.sh/three@0.170.0",
     "sockjs-client": "https://esm.sh/sockjs-client@1.6.1",
     "@stomp/stompjs": "https://esm.sh/@stomp/stompjs@7.0.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "phaser": "https://esm.sh/phaser@^3.90.0"
   }
 }
 </script>

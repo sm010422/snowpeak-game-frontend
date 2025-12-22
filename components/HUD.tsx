@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Users, Settings, LogOut, Map as MapIcon } from 'lucide-react';
+import { MessageSquare, Users, LogOut, Map as MapIcon, Layers } from 'lucide-react';
 import { socketService } from '../services/SocketService';
 import { GameMessage } from '../types';
 
@@ -26,87 +26,70 @@ const HUD: React.FC<HUDProps> = ({ nickname, role, onLeave }) => {
   const sendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    socketService.sendMessage('/app/chat', {
-      type: 'CHAT',
-      nickname,
-      content: chatInput
-    });
+    socketService.sendMessage('/app/chat', { type: 'CHAT', nickname, content: chatInput });
     setChatInput('');
   };
 
   return (
-    <div className="fixed inset-0 pointer-events-none flex flex-col justify-between p-6">
-      {/* Top Bar */}
+    <div className="fixed inset-0 pointer-events-none flex flex-col justify-between p-8 font-sans">
+      {/* Top Navigation */}
       <div className="flex justify-between items-start pointer-events-auto">
-        <div className="bg-[#1a1c23]/80 backdrop-blur-md px-6 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-4 text-white">
-          <div className="w-10 h-10 bg-gradient-to-br from-[#5d4037] to-[#3e2723] rounded-xl flex items-center justify-center text-white font-bold shadow-inner">
+        <div className="flex items-center gap-4 bg-white/80 backdrop-blur-xl p-2 pr-6 rounded-2xl shadow-xl border border-white/50">
+          <div className="w-12 h-12 bg-[#3e2723] rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">
             {nickname[0].toUpperCase()}
           </div>
           <div>
-            <p className="text-sm font-bold leading-tight">{nickname}</p>
-            <p className="text-[10px] font-bold text-green-400 uppercase tracking-widest">{role.replace('_', ' ')}</p>
+            <h2 className="text-sm font-bold text-gray-800 leading-none">{nickname}</h2>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{role.replace('_', ' ')}</p>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <div className="bg-[#1a1c23]/80 backdrop-blur-md p-2 rounded-2xl border border-white/10 flex gap-1">
-             <button className="p-2.5 text-gray-400 hover:text-white transition-colors">
-               <Users size={20} />
-             </button>
-             <button className="p-2.5 text-gray-400 hover:text-white transition-colors">
-               <MapIcon size={20} />
-             </button>
-             <div className="w-px bg-white/10 mx-1" />
-             <button 
-              onClick={onLeave}
-              className="p-2.5 text-red-400 hover:text-red-300 transition-colors"
-            >
-              <LogOut size={20} />
-            </button>
+        <div className="flex gap-3">
+          <div className="flex bg-white/80 backdrop-blur-xl p-1 rounded-2xl shadow-xl border border-white/50">
+            <button className="p-3 text-gray-500 hover:text-black hover:bg-black/5 rounded-xl transition-all"><Users size={20} /></button>
+            <button className="p-3 text-gray-500 hover:text-black hover:bg-black/5 rounded-xl transition-all"><Layers size={20} /></button>
+            <div className="w-px bg-gray-200 mx-1 self-stretch" />
+            <button onClick={onLeave} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-all"><LogOut size={20} /></button>
           </div>
         </div>
       </div>
 
-      {/* Side Inventory / Stats Style Panel (Hidden logic, just visual placeholder) */}
-      <div className="absolute right-6 top-24 pointer-events-auto hidden md:flex flex-col gap-3">
-         <div className="w-16 h-16 bg-[#1a1c23]/80 backdrop-blur-md border border-white/10 rounded-2xl flex items-center justify-center text-yellow-500 shadow-xl">
-            <div className="text-xs font-bold">LV.1</div>
-         </div>
-         <div className="w-16 h-48 bg-[#1a1c23]/80 backdrop-blur-md border border-white/10 rounded-2xl flex flex-col items-center py-4 gap-4 shadow-xl">
-            <div className="w-10 h-10 bg-white/5 rounded-lg" />
-            <div className="w-10 h-10 bg-white/5 rounded-lg" />
-            <div className="w-10 h-10 bg-white/5 rounded-lg" />
-         </div>
+      {/* Mini Map Style UI (Visual only) */}
+      <div className="absolute right-8 top-32 pointer-events-auto">
+        <div className="w-48 h-48 bg-white/60 backdrop-blur-md rounded-3xl border border-white border-dashed overflow-hidden relative shadow-lg">
+           <div className="absolute inset-4 bg-[#e5e0d8] rounded-xl opacity-50" />
+           <div className="absolute top-1/2 left-1/2 w-3 h-3 bg-red-500 rounded-full animate-pulse transform -translate-x-1/2 -translate-y-1/2" />
+           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">FLOOR PLAN VIEW</div>
+        </div>
       </div>
 
-      {/* Chat Area */}
+      {/* Chat Component */}
       <div className="flex flex-col items-start gap-4 pointer-events-auto">
-        <div className={`w-80 transition-all duration-300 origin-bottom-left ${isChatOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
-          <div className="bg-[#1a1c23]/90 backdrop-blur-xl rounded-3xl p-5 text-white overflow-hidden shadow-2xl border border-white/10">
-            <div className="h-48 overflow-y-auto mb-4 space-y-3 scrollbar-hide pr-2">
+        <div className={`w-80 transition-all duration-500 origin-bottom-left ${isChatOpen ? 'scale-100 opacity-100' : 'scale-90 opacity-0 pointer-events-none'}`}>
+          <div className="bg-white/90 backdrop-blur-2xl rounded-[32px] p-6 shadow-2xl border border-white/50">
+            <div className="h-40 overflow-y-auto mb-4 space-y-4 scrollbar-hide">
               {messages.map((m, i) => (
-                <div key={i} className="text-sm animate-in slide-in-from-left-2 duration-300">
-                  <span className="font-bold text-yellow-500">{m.sender}: </span>
-                  <span className="text-gray-300">{m.text}</span>
+                <div key={i} className="animate-in fade-in slide-in-from-left-4">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter mb-0.5">{m.sender}</p>
+                  <p className="text-sm text-gray-700 bg-gray-50 p-3 rounded-2xl rounded-tl-none">{m.text}</p>
                 </div>
               ))}
-              {messages.length === 0 && <p className="text-xs text-white/30 italic">Silence in the snow...</p>}
+              {messages.length === 0 && <p className="text-xs text-gray-300 italic text-center py-4">Start a conversation...</p>}
             </div>
             <form onSubmit={sendChat}>
               <input 
                 type="text" 
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Whisper to the world..."
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm focus:outline-none focus:border-yellow-500/50 transition-all placeholder:text-white/20"
+                placeholder="Type a message..."
+                className="w-full bg-gray-100 border-none rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-black/5 transition-all outline-none"
               />
             </form>
           </div>
         </div>
-
         <button 
           onClick={() => setIsChatOpen(!isChatOpen)}
-          className={`p-5 rounded-full shadow-2xl transition-all active:scale-90 ${isChatOpen ? 'bg-yellow-500 text-black' : 'bg-[#1a1c23]/80 backdrop-blur-md text-white border border-white/10'}`}
+          className={`w-16 h-16 rounded-3xl shadow-2xl flex items-center justify-center transition-all active:scale-90 ${isChatOpen ? 'bg-black text-white' : 'bg-white text-black'}`}
         >
           <MessageSquare size={24} />
         </button>
