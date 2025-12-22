@@ -4,7 +4,7 @@ import { socketService } from '../services/SocketService';
 import { GameMessage } from '../types';
 
 export class MainScene extends Phaser.Scene {
-  // Phaser 내부 시스템 객체들을 명시적으로 선언하여 타입 오류와 런타임 undefined 방지
+  // Phaser 내부 시스템 객체들을 명시적으로 선언
   public declare add: Phaser.GameObjects.GameObjectFactory;
   public declare cameras: Phaser.Cameras.Scene2D.CameraManager;
   public declare input: Phaser.Input.InputPlugin;
@@ -31,17 +31,12 @@ export class MainScene extends Phaser.Scene {
     this.myRole = data.role;
   }
 
-  preload() {
-    // 그래픽 기반으로 제작하므로 별도 에셋 로드는 생략
-  }
-
   create() {
-    // 배경 (아늑한 캠핑장 나무 바닥 느낌)
+    // 배경 설정
     const floor = this.add.graphics();
     floor.fillStyle(0x8b7355, 1);
     floor.fillRect(0, 0, 2000, 2000);
     
-    // 위치 참고용 그리드
     this.add.grid(1000, 1000, 2000, 2000, 64, 64, 0x000000, 0, 0x5d4037, 0.2);
 
     // 내 캐릭터 생성
@@ -49,13 +44,13 @@ export class MainScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.me, true, 0.1, 0.1);
     this.cameras.main.setBounds(0, 0, 2000, 2000);
 
-    // 조작 설정
+    // 입력 설정
     if (this.input && this.input.keyboard) {
       this.cursors = this.input.keyboard.createCursorKeys();
       this.wasd = this.input.keyboard.addKeys('W,A,S,D') as any;
     }
 
-    // 서버 메시지 구독
+    // 소켓 구독
     socketService.subscribe((msg: GameMessage) => {
       this.handleServerUpdate(msg);
     });
@@ -65,7 +60,7 @@ export class MainScene extends Phaser.Scene {
     const container = this.add.container(x, y);
     
     const body = this.add.graphics();
-    const color = isMe ? 0x4ade80 : 0xf87171; // 본인은 초록색, 타인은 빨간색 계열
+    const color = isMe ? 0x4ade80 : 0xf87171;
     body.fillStyle(color, 1);
     body.fillRoundedRect(-20, -20, 40, 40, 8);
     body.lineStyle(2, 0xffffff, 1);
@@ -110,7 +105,6 @@ export class MainScene extends Phaser.Scene {
   update(time: number, delta: number) {
     if (!this.me) return;
 
-    // 움직임 처리
     let vx = 0;
     let vy = 0;
     const speed = 0.3 * delta;
@@ -123,7 +117,6 @@ export class MainScene extends Phaser.Scene {
     this.me.x += vx;
     this.me.y += vy;
 
-    // 이동 시 서버에 위치 전송
     const dist = Phaser.Math.Distance.Between(this.me.x, this.me.y, this.lastSentPos.x, this.lastSentPos.y);
     if (dist > this.moveThreshold) {
       socketService.sendMessage('/app/move', {
@@ -135,7 +128,6 @@ export class MainScene extends Phaser.Scene {
       this.lastSentPos = { x: this.me.x, y: this.me.y };
     }
 
-    // 타 플레이어 위치 보간 (Interpolation)
     this.otherPlayers.forEach((player, id) => {
       const target = this.targetPositions.get(id);
       if (target) {
