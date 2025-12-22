@@ -5,6 +5,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snowpeak Game</title>
+    <!-- sockjs-client가 내부적으로 global 변수를 참조하기 때문에 브라우저에서 선언해줍니다. -->
+    <script>
+      if (typeof global === 'undefined') {
+        window.global = window;
+      }
+      // 일부 라이브러리 호환성을 위해 process 객체도 최소한으로 정의합니다.
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       body {

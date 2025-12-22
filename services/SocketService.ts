@@ -5,7 +5,7 @@ import { GameMessage } from '../types';
 
 class SocketService {
   private client: Client | null = null;
-  private subscribers: ((msg: GameMessage) => void)[] = [];
+  private subscribers: ((msg: any) => void)[] = [];
   private static instance: SocketService;
 
   private constructor() {}
@@ -18,7 +18,7 @@ class SocketService {
   }
 
   public connect(nickname: string, role: string, onConnected: () => void, onError: (err: any) => void) {
-    // 백엔드 WebSocketConfig의 registry.addEndpoint("/ws-snowpeak")에 맞춤
+    // 백엔드 엔드포인트: /ws-snowpeak
     const socket = new SockJS('http://localhost:8080/ws-snowpeak');
     
     this.client = new Client({
@@ -27,47 +27,45 @@ class SocketService {
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,
+      // SockJS를 사용할 때 필요한 프로토콜 호환성 설정
+      onConnect: (frame) => {
+        console.log('STOMP Connected');
+        
+        // 1. 공통 룸 구독
+        this.client?.subscribe('/topic/room.1', (message: Message) => {
+          try {
+            const payload = JSON.parse(message.body);
+            this.notifySubscribers(payload);
+          } catch (e) {
+            console.error('Message Parse Error', e);
+          }
+        });
+
+        // 2. 개인 큐 구독 (신규 접속 시 기존 플레이어 목록 수신용)
+        this.client?.subscribe('/user/queue/players', (message: Message) => {
+          try {
+            const payload = JSON.parse(message.body);
+            this.notifySubscribers(payload);
+          } catch (e) {
+            console.error('Queue Parse Error', e);
+          }
+        });
+
+        // 3. 접속 메시지 전송 (@MessageMapping("/join"))
+        this.sendMessage('/app/join', {
+          nickname: nickname,
+          role: role.toUpperCase(),
+          x: 400,
+          y: 300
+        });
+
+        onConnected();
+      },
+      onStompError: (frame) => {
+        console.error('STOMP Error:', frame);
+        onError(frame.headers['message']);
+      }
     });
-
-    this.client.onConnect = (frame) => {
-      console.log('Connected to Snowpeak Backend');
-      
-      // 방 구독 (백엔드 destination: /topic/room.1)
-      this.client?.subscribe('/topic/room.1', (message: Message) => {
-        try {
-          const payload = JSON.parse(message.body);
-          // 백엔드에서 PlayerState 객체가 바로 넘어오므로 적절히 처리
-          this.notifySubscribers(payload);
-        } catch (e) {
-          console.error('Failed to parse message', e);
-        }
-      });
-
-      // 개인 큐 구독 (기존 플레이어 정보 수신용)
-      this.client?.subscribe('/user/queue/players', (message: Message) => {
-        try {
-          const payload = JSON.parse(message.body);
-          this.notifySubscribers(payload);
-        } catch (e) {
-          console.error('Failed to parse user queue message', e);
-        }
-      });
-
-      // JOIN 메시지 전송 (백엔드 @MessageMapping("/join"))
-      this.sendMessage('/app/join', {
-        type: 'JOIN',
-        nickname,
-        role: role.toUpperCase(),
-        x: 400,
-        y: 300
-      });
-
-      onConnected();
-    };
-
-    this.client.onStompError = (frame) => {
-      onError(frame.headers['message']);
-    };
 
     this.client.activate();
   }
