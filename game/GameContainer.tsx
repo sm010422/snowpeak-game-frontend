@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { socketService } from '../services/SocketService';
@@ -20,42 +19,115 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
     // 1. Scene & Camera Setup
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xdbe9f6); // Soft blue sky
+    // 배경색을 따뜻한 실내 벽지 톤으로 변경
+    scene.background = new THREE.Color(0xf0eade);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // 맵이 넓어졌으므로 카메라를 조금 더 높고 멀리 배치하여 시야 확보
+    camera.position.set(0, 30, 30);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mountRef.current.appendChild(renderer.domElement);
 
-    // 2. Lighting
-    const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // 2. Lighting (실내 분위기로 조정)
+    // 전체적으로 따뜻하고 밝은 빛
+    const ambLight = new THREE.AmbientLight(0xffedd0, 0.8);
     scene.add(ambLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(20, 50, 30);
+    // 그림자를 드리우는 주광원 (창문에서 들어오는 빛 느낌)
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(50, 80, 30); // 위치 조정
     dirLight.castShadow = true;
-    dirLight.shadow.mapSize.set(2048, 2048);
+    // 그림자 맵 크기와 범위를 넓혀서 전체 맵 커버
+    dirLight.shadow.mapSize.set(4096, 4096);
+    dirLight.shadow.camera.left = -60;
+    dirLight.shadow.camera.right = 60;
+    dirLight.shadow.camera.top = 60;
+    dirLight.shadow.camera.bottom = -60;
     scene.add(dirLight);
 
-    // 3. Environment
-    // Ground
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 }) // Snow-like white
-    );
+    // 3. Environment Building (도면 기반 맵 생성)
+    
+    // 바닥 (따뜻한 나무 마루 색상)
+    const floorGeo = new THREE.PlaneGeometry(120, 120);
+    const floorMat = new THREE.MeshStandardMaterial({ 
+        color: 0xd4b895, // Wood color
+        roughness: 0.8,
+        metalness: 0.1
+    });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Simple Grid to sense movement
-    const grid = new THREE.GridHelper(100, 50, 0xccddee, 0xccddee);
-    grid.position.y = 0.01;
-    scene.add(grid);
+    // --- 도면 구조물 생성 함수 ---
+    const buildCafeMap = () => {
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xf2eadb, roughness: 0.9 }); // 베이지색 벽
+        const wallHeight = 6; // 벽 높이
+        const thickness = 0.8; // 벽 두께
 
-    // 4. Avatar Factory
+        // 벽 생성 헬퍼 함수 (중심 좌표 x, z, 너비, 깊이)
+        const addWall = (x: number, z: number, width: number, depth: number) => {
+            const geo = new THREE.BoxGeometry(width, wallHeight, depth);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(x, wallHeight / 2, z); // 바닥 위에 놓기
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+        };
+
+        // 도면을 참고한 대략적인 구조 배치 (좌표는 비율에 맞춰 조정됨)
+        // 맵 중심을 (0,0)으로 기준
+
+        // 1. 외곽 벽 (Outer Walls)
+        addWall(-20, 0, thickness, 80); // 왼쪽 긴 벽
+        addWall(20, 0, thickness, 80);  // 오른쪽 긴 벽
+        addWall(0, -40, 40 + thickness, thickness); // 상단 벽
+        addWall(0, 40, 40 + thickness, thickness);  // 하단 벽
+
+        // 2. 상단부 구조 (Top Section)
+        // 상단 가로 벽 (입구쪽 복도 형성)
+        addWall(-10, -30, 20, thickness); 
+        addWall(15, -30, 10, thickness); // 문 틈을 위해 분할
+
+        // 상단 'ㄷ'자 파티션
+        addWall(-5, -22, thickness, 16); // 세로
+        addWall(0, -14, 10, thickness);  // 가로 밑변
+
+        // 3. 중단부 방 구조 (Middle Rooms)
+        const midZ = 0;
+        // 왼쪽 방 (큰 방)
+        addWall(-10, midZ - 5, 20, thickness); // 방 상단 벽
+        addWall(-10, midZ + 10, 20, thickness); // 방 하단 벽
+        addWall(0, midZ + 2.5, thickness, 15);  // 방 오른쪽 벽
+
+        // 오른쪽 방들 (작은 방 2개)
+        addWall(10, midZ - 5, 20, thickness); // 방 상단 벽
+        addWall(10, midZ + 10, 20, thickness); // 방 하단 벽
+        addWall(10, midZ + 2.5, thickness, 15); // 방 사이 벽
+
+        // 4. 하단부 넓은 홀 및 파티션 (Bottom Hall)
+        // 중앙 'ㄷ'자형 파티션
+        addWall(-5, 25, thickness, 10); // 세로
+        addWall(0, 20, 10, thickness);  // 가로 윗변
+        addWall(0, 30, 10, thickness);  // 가로 아랫변
+
+        // 하단 좌우측 구석 파티션
+        addWall(-15, 32, thickness, 16); // 왼쪽 구석 세로
+        addWall(-10, 24, 10, thickness); // 왼쪽 구석 가로
+        addWall(15, 32, thickness, 16);  // 오른쪽 구석 세로
+        addWall(10, 24, 10, thickness);  // 오른쪽 구석 가로
+    };
+
+    // 맵 생성 실행
+    buildCafeMap();
+
+
+    // 4. Avatar Factory (기존 캐릭터 유지)
     const createAvatar = (color: number, name: string) => {
       const group = new THREE.Group();
       
@@ -102,15 +174,16 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     // Create my character
     const myColor = role === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
     myPlayerRef.current = createAvatar(myColor, nickname);
-    myPlayerRef.current.position.set(0, 0.25, 0);
+    // 시작 위치를 맵 중앙의 넓은 홀쪽으로 약간 이동
+    myPlayerRef.current.position.set(0, 0.25, 15);
 
-    // 5. Input System
+    // 5. Input System (기존 유지)
     const handleKeyDown = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = true; };
     const handleKeyUp = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = false; };
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // 6. Animation Loop
+    // 6. Animation Loop (기존 유지)
     let lastTime = performance.now();
     let lastNetworkSync = 0;
     const velocity = new THREE.Vector3();
@@ -151,12 +224,12 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
         player.position.add(velocity.clone().multiplyScalar(deltaTime));
 
-        // World boundaries
-        player.position.x = THREE.MathUtils.clamp(player.position.x, -48, 48);
-        player.position.z = THREE.MathUtils.clamp(player.position.z, -48, 48);
+        // World boundaries (맵 크기에 맞춰 조정)
+        player.position.x = THREE.MathUtils.clamp(player.position.x, -38, 38);
+        player.position.z = THREE.MathUtils.clamp(player.position.z, -38, 38);
 
         // Camera Follow
-        const camOffset = new THREE.Vector3(15, 20, 15);
+        const camOffset = new THREE.Vector3(0, 30, 30); // 카메라 각도 약간 수정
         const targetCamPos = player.position.clone().add(camOffset);
         camera.position.lerp(targetCamPos, 0.1);
         camera.lookAt(player.position);
@@ -190,7 +263,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
     requestAnimationFrame(frame);
 
-    // 7. Network Subscription
+    // 7. Network Subscription (기존 유지)
     const unsubscribe = socketService.subscribe((msg: any) => {
       const pid = msg.playerId || msg.nickname;
       if (!pid || pid === nickname) return;
