@@ -15,12 +15,14 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const myAvatarRef = useRef<Avatar | null>(null);
   const otherAvatarsRef = useRef<Map<string, Avatar>>(new Map());
   const keysRef = useRef<{ [key: string]: boolean }>({});
+  const sceneRef = useRef<THREE.Scene | null>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
 
     // 1. Basic Setup
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -40,10 +42,10 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     // 4. Keyboard Controls
     const onKeyDown = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = true; };
     const onKeyUp = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = false; };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKeyDown, { passive: true });
+    window.addEventListener('keyup', onKeyUp, { passive: true });
 
-    // 5. Game Loop (The Control Logic)
+    // 5. Game Loop
     let lastTime = performance.now();
     let lastNetSync = 0;
     const velocity = new THREE.Vector3();
@@ -51,6 +53,13 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     const update = (time: number) => {
       const deltaTime = Math.min((time - lastTime) / 1000, 0.1);
       lastTime = time;
+
+      // Windmill Animation
+      scene.traverse((obj) => {
+        if (obj.userData.bladeGroup) {
+          obj.userData.bladeGroup.rotation.z += deltaTime * 2;
+        }
+      });
 
       if (myAvatarRef.current) {
         const avatar = myAvatarRef.current;
@@ -64,23 +73,27 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         const isMoving = inputDir.length() > 0;
         if (isMoving) {
           inputDir.normalize();
-          velocity.lerp(inputDir.multiplyScalar(12), 0.15); // Smooth speed up
+          velocity.lerp(inputDir.multiplyScalar(15), 0.2); // Speed increased for 3D units
           
           const targetRot = Math.atan2(velocity.x, velocity.z);
           avatar.group.rotation.y = THREE.MathUtils.lerp(avatar.group.rotation.y, targetRot, 0.2);
         } else {
-          velocity.lerp(new THREE.Vector3(), 0.15); // Smooth stop
+          velocity.lerp(new THREE.Vector3(), 0.15);
         }
 
         avatar.group.position.add(velocity.clone().multiplyScalar(deltaTime));
         avatar.updateAnimation(time, velocity.length() > 0.5);
 
+        // Map Boundary (15 tiles * 4 units = 60 range, center offset makes it -30 to 30)
+        avatar.group.position.x = THREE.MathUtils.clamp(avatar.group.position.x, -28, 28);
+        avatar.group.position.z = THREE.MathUtils.clamp(avatar.group.position.z, -28, 28);
+
         // Camera Follow
-        const camOffset = new THREE.Vector3(12, 16, 12);
+        const camOffset = new THREE.Vector3(15, 20, 15);
         camera.position.lerp(avatar.group.position.clone().add(camOffset), 0.1);
         camera.lookAt(avatar.group.position);
 
-        // Network Update (Sync position)
+        // Network Update
         if (time - lastNetSync > 50) {
           socketService.sendMessage('/app/update', {
             playerId: nickname, nickname,
@@ -92,7 +105,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         }
       }
 
-      // Update Other Players (Sync interpolation)
+      // Update Other Players
       otherAvatarsRef.current.forEach((avatar) => {
         const prevPos = avatar.group.position.clone();
         avatar.lerpToTarget(0.15);
