@@ -13,7 +13,7 @@ export class Avatar {
 
     // Body
     this.body = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 1, 0.5),
+      new THREE.BoxGeometry(0.8, 1.0, 0.5),
       new THREE.MeshStandardMaterial({ color })
     );
     this.body.position.y = 0.5;
@@ -53,10 +53,10 @@ export class Avatar {
 
   public updateAnimation(time: number, isMoving: boolean) {
     if (isMoving) {
-      const t = time * 0.01;
-      this.lLeg.rotation.x = Math.sin(t) * 0.5;
-      this.rLeg.rotation.x = -Math.sin(t) * 0.5;
-      this.body.position.y = 0.5 + Math.abs(Math.cos(t)) * 0.1;
+      const t = time * 10; // Faster animation cycle
+      this.lLeg.rotation.x = Math.sin(t) * 0.6;
+      this.rLeg.rotation.x = -Math.sin(t) * 0.6;
+      this.body.position.y = 0.5 + Math.abs(Math.cos(t)) * 0.15;
     } else {
       this.lLeg.rotation.x = THREE.MathUtils.lerp(this.lLeg.rotation.x, 0, 0.1);
       this.rLeg.rotation.x = THREE.MathUtils.lerp(this.rLeg.rotation.x, 0, 0.1);
