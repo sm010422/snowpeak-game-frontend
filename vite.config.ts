@@ -9,6 +9,15 @@ export default defineConfig(({ mode }) => {
         port: 3000,
         host: '0.0.0.0',
         allowedHosts: true,
+
+        proxy: {
+          '/ws-snowpeak': {
+            target: 'http://localhost:8080',
+            changeOrigin: true,
+            ws: true,
+          
+          },
+        },
       },
       plugins: [react()],
       define: {
