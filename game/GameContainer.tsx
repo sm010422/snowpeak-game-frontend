@@ -5,7 +5,7 @@ import { socketService } from '../services/SocketService';
 import { Avatar } from './Avatar';
 import { Environment } from './Environment';
 import { PlayerState } from '../types';
-import { useKeyboard } from '../hooks/uesKeyborad';
+import { useKeyboard } from '../hooks/userKeyboard';
 
 interface GameContainerProps {
   nickname: string;
