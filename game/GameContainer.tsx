@@ -19,12 +19,14 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const requestRef = useRef<number>(0);
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const activeRef = useRef<boolean>(true);
+  const sceneRef = useRef<THREE.Scene | null>(null);
 
   useEffect(() => {
     if (!mountRef.current) return;
     activeRef.current = true;
 
     const scene = new THREE.Scene();
+    sceneRef.current = scene;
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ 
       antialias: true, 
@@ -41,6 +43,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
     new Environment(scene);
 
+    // 내 캐릭터 생성
     const myColor = role === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
     const myAvatar = new Avatar(myColor, nickname);
     myAvatar.group.position.set(0, 0, 0);
@@ -62,11 +65,38 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // Physics & Sync State
     const velocity = new THREE.Vector3();
     const moveSpeed = 22;
     let lastNetSync = 0;
-    const lastSentPosition = new THREE.Vector3(); // 마지막으로 서버에 보낸 위치
+    const lastSentPosition = new THREE.Vector3();
+
+    // 헬퍼: 다른 플레이어 추가/업데이트
+    const processPlayerUpdate = (data: any) => {
+      const pid = data.playerId || data.nickname;
+      if (!pid || pid === nickname) return;
+
+      if (!otherAvatarsRef.current.has(pid)) {
+        console.log("New player detected:", pid);
+        const otherPlayer = new Avatar(0xe74c3c, pid);
+        // 생성 즉시 위치 설정 (텔레포트 방지)
+        if (data.x !== undefined) {
+          const startX = data.x / 100;
+          const startZ = data.y / 100;
+          otherPlayer.group.position.set(startX, 0, startZ);
+          otherPlayer.targetPos.set(startX, 0, startZ);
+        }
+        scene.add(otherPlayer.group);
+        otherAvatarsRef.current.set(pid, otherPlayer);
+      }
+
+      const other = otherAvatarsRef.current.get(pid);
+      if (other && data.x !== undefined) {
+        other.targetPos.set(data.x / 100, 0, data.y / 100);
+        if (data.direction) {
+          other.targetRotation = parseFloat(data.direction);
+        }
+      }
+    };
 
     const update = () => {
       if (!activeRef.current) return;
@@ -93,7 +123,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
           inputDir.normalize();
           const targetVelocity = inputDir.multiplyScalar(moveSpeed);
           velocity.lerp(targetVelocity, 0.25);
-
           const targetAngle = Math.atan2(velocity.x, velocity.z);
           avatar.group.rotation.y = THREE.MathUtils.lerp(avatar.group.rotation.y, targetAngle, 0.2);
         } else {
@@ -101,7 +130,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         }
 
         avatar.group.position.add(velocity.clone().multiplyScalar(deltaTime));
-        
         const isMoving = velocity.length() > 0.8;
         avatar.updateAnimation(elapsedTime, isMoving);
 
@@ -113,18 +141,15 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         camera.position.lerp(camTarget, 0.08);
         camera.lookAt(avatar.group.position);
 
-        // --- NETWORK THROTTLING (100ms) ---
         const now = performance.now();
-        if (now - lastNetSync > 100) { // 50ms -> 100ms로 변경
+        if (now - lastNetSync > 100) {
           const distanceMoved = avatar.group.position.distanceTo(lastSentPosition);
-          
-          // 움직임이 있거나, 멈췄을 때의 마지막 상태를 전송 (최소 거리 threshold 적용)
           if (distanceMoved > 0.1 || (isMoving === false && distanceMoved > 0.01)) {
             socketService.sendMessage('/app/update', {
               playerId: nickname, nickname,
               x: Math.round(avatar.group.position.x * 100),
               y: Math.round(avatar.group.position.z * 100),
-              direction: avatar.group.rotation.y.toString(), // 회전값 전달
+              direction: avatar.group.rotation.y.toString(),
               role: role.toUpperCase(), roomId: "1"
             });
             lastNetSync = now;
@@ -133,14 +158,9 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         }
       }
 
-      // --- OTHER PLAYERS INTERPOLATION (Smoothing) ---
       otherAvatarsRef.current.forEach((other) => {
         const oldPos = other.group.position.clone();
-        
-        // 부드러운 이동 보간 (alpha: 0.15~0.2 정도가 적당함)
         other.lerpToTarget(0.15);
-        
-        // 애니메이션 작동 여부 판단
         const moved = other.group.position.distanceTo(oldPos) > 0.02;
         other.updateAnimation(elapsedTime, moved);
       });
@@ -152,23 +172,12 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     clockRef.current.start();
     requestRef.current = requestAnimationFrame(update);
 
+    // 네트워크 구독: 배열과 단일 객체 모두 대응
     const unsubscribe = socketService.subscribe((msg: any) => {
-      const pid = msg.playerId || msg.nickname;
-      if (!pid || pid === nickname) return;
-
-      if (!otherAvatarsRef.current.has(pid)) {
-        const otherPlayer = new Avatar(0xe74c3c, pid);
-        scene.add(otherPlayer.group);
-        otherAvatarsRef.current.set(pid, otherPlayer);
-      }
-
-      const other = otherAvatarsRef.current.get(pid);
-      if (other && msg.x !== undefined) {
-        // 즉시 위치를 바꾸지 않고 'target'만 설정 (보간을 위해)
-        other.targetPos.set(msg.x / 100, 0, msg.y / 100);
-        if (msg.direction) {
-          other.targetRotation = parseFloat(msg.direction);
-        }
+      if (Array.isArray(msg)) {
+        msg.forEach(playerData => processPlayerUpdate(playerData));
+      } else {
+        processPlayerUpdate(msg);
       }
     });
 

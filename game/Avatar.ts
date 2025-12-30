@@ -7,14 +7,13 @@ export class Avatar {
   public lLeg: THREE.Mesh;
   public rLeg: THREE.Mesh;
   
-  // 보간을 위한 목표 지점 및 회전값
   public targetPos: THREE.Vector3 = new THREE.Vector3();
   public targetRotation: number = 0;
 
   constructor(color: number, name: string) {
     this.group = new THREE.Group();
 
-    // Body
+    // 1. Body
     this.body = new THREE.Mesh(
       new THREE.BoxGeometry(0.8, 1.0, 0.5),
       new THREE.MeshStandardMaterial({ color })
@@ -23,7 +22,7 @@ export class Avatar {
     this.body.castShadow = true;
     this.group.add(this.body);
 
-    // Head
+    // 2. Head
     const head = new THREE.Mesh(
       new THREE.BoxGeometry(0.6, 0.6, 0.6),
       new THREE.MeshStandardMaterial({ color: 0xffdbac })
@@ -32,7 +31,7 @@ export class Avatar {
     head.castShadow = true;
     this.group.add(head);
 
-    // Hat
+    // 3. Hat
     const hat = new THREE.Mesh(
       new THREE.BoxGeometry(0.7, 0.2, 0.7),
       new THREE.MeshStandardMaterial({ color: 0x333333 })
@@ -40,7 +39,7 @@ export class Avatar {
     hat.position.y = 1.65;
     this.group.add(hat);
 
-    // Legs
+    // 4. Legs
     const legGeo = new THREE.BoxGeometry(0.3, 0.5, 0.3);
     const legMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
     this.lLeg = new THREE.Mesh(legGeo, legMat);
@@ -51,11 +50,28 @@ export class Avatar {
     this.rLeg.position.set(0.25, 0.25, 0);
     this.group.add(this.rLeg);
 
+    // 5. Name Label (Sprite)
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.roundRect(0, 0, 256, 64, 20);
+      ctx.fill();
+      ctx.font = 'bold 32px Arial';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.fillText(name, 128, 42);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.y = 2.2;
+    sprite.scale.set(2, 0.5, 1);
+    this.group.add(sprite);
+
     this.group.userData = { name };
-    
-    // 초기 타겟 설정
-    this.targetPos.copy(this.group.position);
-    this.targetRotation = this.group.rotation.y;
   }
 
   public updateAnimation(time: number, isMoving: boolean) {
@@ -73,15 +89,8 @@ export class Avatar {
     }
   }
 
-  /**
-   * 서버에서 받은 목표 지점으로 현재 위치와 회전을 부드럽게 보간합니다.
-   * @param alpha 보간 계수 (0~1, 클수록 반응속도가 빠름)
-   */
   public lerpToTarget(alpha: number = 0.1) {
-    // 위치 보간
     this.group.position.lerp(this.targetPos, alpha);
-    
-    // 회전 보간 (각도 래핑 처리 포함)
     this.group.rotation.y = THREE.MathUtils.lerp(this.group.rotation.y, this.targetRotation, alpha);
   }
 }
