@@ -5,6 +5,7 @@ import { socketService } from '../services/SocketService';
 import { Avatar } from './Avatar';
 import { Environment } from './Environment';
 import { PlayerState } from '../types';
+import { useKeyboard } from '../hooks/uesKeyborad';
 
 interface GameContainerProps {
   nickname: string;
@@ -22,7 +23,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const myAvatarRef = useRef<Avatar | null>(null);
   const otherAvatarsRef = useRef<Map<string, Avatar>>(new Map());
   
-  const keysRef = useRef<{ [key: string]: boolean }>({});
+  const keysRef = useKeyboard();
   const requestRef = useRef<number>(0);
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const activeRef = useRef<boolean>(true);
@@ -80,10 +81,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     scene.add(myAvatar.group);
     myAvatarRef.current = myAvatar;
 
-    const handleKeyDown = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = true; };
-    const handleKeyUp = (e: KeyboardEvent) => { keysRef.current[e.key.toLowerCase()] = false; };
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
 
     const velocity = new THREE.Vector3();
     const moveSpeed = 22;
@@ -167,8 +164,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
       activeRef.current = false;
       unsubscribe();
       cancelAnimationFrame(requestRef.current);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
       renderer.dispose();
     };
   }, [nickname, role, handleIncomingUpdate]);
@@ -190,6 +185,28 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         otherAvatarsRef.current.set(pid, newAvatar);
       }
     });
+
+// 2. ★ (수정됨) 나간 사람 삭제 로직 (더 안전한 방식)
+    // 현재 레지스트리에 있는(살아남아야 할) ID들을 집합(Set)으로 만듭니다.
+    const activeIds = new Set(Object.keys(playerRegistry));
+
+    // 현재 화면에 있는 아바타들의 ID 목록을 가져와서 검사합니다.
+    Array.from(otherAvatarsRef.current.keys()).forEach((pid: string) => {
+      // "어? 살아남아야 할 명단(activeIds)에 이 ID가 없네?" -> 삭제 대상
+      if (!activeIds.has(pid)) {
+        const avatarToRemove = otherAvatarsRef.current.get(pid);
+        
+        if (avatarToRemove) {
+          sceneRef.current?.remove(avatarToRemove.group); // 1. 3D 씬에서 제거
+          
+          // (선택사항) 만약 Avatar 클래스에 메모리 정리용 dispose 함수를 만드셨다면 여기서 호출
+          // avatarToRemove.dispose(); 
+        }
+        
+        otherAvatarsRef.current.delete(pid); // 2. 관리 목록(Map)에서 제거
+      }
+    });
+
   }, [playerRegistry]);
 
   return <div ref={mountRef} className="w-full h-screen touch-none outline-none" />;
