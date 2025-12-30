@@ -16,7 +16,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const otherAvatarsRef = useRef<Map<string, Avatar>>(new Map());
   const keysRef = useRef<{ [key: string]: boolean }>({});
   
-  // 상태 관리를 위한 Refs
   const requestRef = useRef<number>(0);
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const activeRef = useRef<boolean>(true);
@@ -25,7 +24,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     if (!mountRef.current) return;
     activeRef.current = true;
 
-    // 1. Scene Setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ 
@@ -37,26 +35,21 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     renderer.shadowMap.enabled = true;
     mountRef.current.appendChild(renderer.domElement);
 
-    // 캔버스에 포커스를 줄 수 있도록 설정
     renderer.domElement.tabIndex = 1;
     renderer.domElement.style.outline = 'none';
     renderer.domElement.focus();
 
-    // 2. Initialize World
     new Environment(scene);
 
-    // 3. Initialize My Avatar
     const myColor = role === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
     const myAvatar = new Avatar(myColor, nickname);
     myAvatar.group.position.set(0, 0, 0);
     scene.add(myAvatar.group);
     myAvatarRef.current = myAvatar;
 
-    // 4. Input Listeners (더 견고하게 관리)
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       keysRef.current[key] = true;
-      // 방향키 스크롤 방지
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(key)) {
         e.preventDefault();
       }
@@ -69,19 +62,18 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // 5. Physics state
+    // Physics & Sync State
     const velocity = new THREE.Vector3();
-    const moveSpeed = 22; // 속도 상향
+    const moveSpeed = 22;
     let lastNetSync = 0;
+    const lastSentPosition = new THREE.Vector3(); // 마지막으로 서버에 보낸 위치
 
-    // 6. Main Update Loop
     const update = () => {
       if (!activeRef.current) return;
 
       const deltaTime = clockRef.current.getDelta();
       const elapsedTime = clockRef.current.getElapsedTime();
 
-      // 환경 애니메이션 (풍차 등)
       scene.traverse((obj) => {
         if (obj.userData.bladeGroup) {
           obj.userData.bladeGroup.rotation.z += deltaTime * 3;
@@ -92,7 +84,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         const avatar = myAvatarRef.current;
         const inputDir = new THREE.Vector3(0, 0, 0);
 
-        // 입력 감지
         if (keysRef.current['w'] || keysRef.current['arrowup']) inputDir.z -= 1;
         if (keysRef.current['s'] || keysRef.current['arrowdown']) inputDir.z += 1;
         if (keysRef.current['a'] || keysRef.current['arrowleft']) inputDir.x -= 1;
@@ -101,50 +92,56 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         if (inputDir.length() > 0) {
           inputDir.normalize();
           const targetVelocity = inputDir.multiplyScalar(moveSpeed);
-          velocity.lerp(targetVelocity, 0.25); // 더 기민한 반응성
+          velocity.lerp(targetVelocity, 0.25);
 
           const targetAngle = Math.atan2(velocity.x, velocity.z);
           avatar.group.rotation.y = THREE.MathUtils.lerp(avatar.group.rotation.y, targetAngle, 0.2);
         } else {
-          velocity.lerp(new THREE.Vector3(0, 0, 0), 0.25); // 더 빠른 정지
+          velocity.lerp(new THREE.Vector3(0, 0, 0), 0.25);
         }
 
-        // 실제 이동 적용
-        const moveStep = velocity.clone().multiplyScalar(deltaTime);
-        avatar.group.position.add(moveStep);
+        avatar.group.position.add(velocity.clone().multiplyScalar(deltaTime));
         
-        // 애니메이션: 속도가 일정 수준 이상일 때만 작동
         const isMoving = velocity.length() > 0.8;
         avatar.updateAnimation(elapsedTime, isMoving);
 
-        // 맵 경계 제한 (Environment의 WORLD_SIZE 기준)
         avatar.group.position.x = THREE.MathUtils.clamp(avatar.group.position.x, -28, 28);
         avatar.group.position.z = THREE.MathUtils.clamp(avatar.group.position.z, -28, 28);
 
-        // 카메라 추적 (부드럽게)
         const camOffset = new THREE.Vector3(18, 22, 18);
         const camTarget = avatar.group.position.clone().add(camOffset);
         camera.position.lerp(camTarget, 0.08);
         camera.lookAt(avatar.group.position);
 
-        // 네트워크 동기화 (이동 중일 때만 더 자주 보냄)
+        // --- NETWORK THROTTLING (100ms) ---
         const now = performance.now();
-        if (now - lastNetSync > 50) {
-          socketService.sendMessage('/app/update', {
-            playerId: nickname, nickname,
-            x: Math.round(avatar.group.position.x * 100),
-            y: Math.round(avatar.group.position.z * 100),
-            role: role.toUpperCase(), roomId: "1"
-          });
-          lastNetSync = now;
+        if (now - lastNetSync > 100) { // 50ms -> 100ms로 변경
+          const distanceMoved = avatar.group.position.distanceTo(lastSentPosition);
+          
+          // 움직임이 있거나, 멈췄을 때의 마지막 상태를 전송 (최소 거리 threshold 적용)
+          if (distanceMoved > 0.1 || (isMoving === false && distanceMoved > 0.01)) {
+            socketService.sendMessage('/app/update', {
+              playerId: nickname, nickname,
+              x: Math.round(avatar.group.position.x * 100),
+              y: Math.round(avatar.group.position.z * 100),
+              direction: avatar.group.rotation.y.toString(), // 회전값 전달
+              role: role.toUpperCase(), roomId: "1"
+            });
+            lastNetSync = now;
+            lastSentPosition.copy(avatar.group.position);
+          }
         }
       }
 
-      // 다른 플레이어 위치 보간
+      // --- OTHER PLAYERS INTERPOLATION (Smoothing) ---
       otherAvatarsRef.current.forEach((other) => {
         const oldPos = other.group.position.clone();
-        other.lerpToTarget(0.2);
-        const moved = other.group.position.distanceTo(oldPos) > 0.05;
+        
+        // 부드러운 이동 보간 (alpha: 0.15~0.2 정도가 적당함)
+        other.lerpToTarget(0.15);
+        
+        // 애니메이션 작동 여부 판단
+        const moved = other.group.position.distanceTo(oldPos) > 0.02;
         other.updateAnimation(elapsedTime, moved);
       });
 
@@ -155,7 +152,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     clockRef.current.start();
     requestRef.current = requestAnimationFrame(update);
 
-    // 7. Network Listeners
     const unsubscribe = socketService.subscribe((msg: any) => {
       const pid = msg.playerId || msg.nickname;
       if (!pid || pid === nickname) return;
@@ -168,11 +164,14 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
       const other = otherAvatarsRef.current.get(pid);
       if (other && msg.x !== undefined) {
+        // 즉시 위치를 바꾸지 않고 'target'만 설정 (보간을 위해)
         other.targetPos.set(msg.x / 100, 0, msg.y / 100);
+        if (msg.direction) {
+          other.targetRotation = parseFloat(msg.direction);
+        }
       }
     });
 
-    // 8. Resize Handler
     const handleResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
@@ -180,7 +179,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     };
     window.addEventListener('resize', handleResize);
 
-    // 9. Cleanup
     return () => {
       activeRef.current = false;
       unsubscribe();
@@ -193,7 +191,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     };
   }, [nickname, role]);
 
-  // 클릭 시 포커스를 캔버스로 강제 이동시키는 헬퍼
   const handleFocus = () => {
     const canvas = mountRef.current?.querySelector('canvas');
     if (canvas) canvas.focus();
