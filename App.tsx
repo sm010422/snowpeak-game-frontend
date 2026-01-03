@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import LoginScreen from './components/LoginScreen';
 import GameContainer from './game/GameContainer';
@@ -6,30 +5,15 @@ import HUD from './components/HUD';
 import { socketService } from './services/SocketService';
 
 const App: React.FC = () => {
-  const [gameState, setGameState] = useState<'LOGIN' | 'CONNECTING' | 'PLAYING'>('LOGIN');
+  // 'CONNECTING' 상태 제거 (GameContainer가 알아서 연결함)
+  const [gameState, setGameState] = useState<'LOGIN' | 'PLAYING'>('LOGIN');
   const [user, setUser] = useState<{nickname: string, role: string} | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
+  // 1. 로그인 버튼 누르면 -> 그냥 바로 게임 화면으로 전환
   const handleJoin = (nickname: string, role: string) => {
-    setGameState('CONNECTING');
-    setError(null);
-
-    // SocketService를 통해 localhost:8080에 연결 시도
-    socketService.connect(
-      nickname, 
-      role, 
-      () => {
-        // 성공 시
-        setUser({ nickname, role });
-        setGameState('PLAYING');
-      },
-      (err) => {
-        // 실패 시
-        console.error('Connection failed:', err);
-        setError('서버 연결에 실패했습니다. (localhost:8080 확인 필요)');
-        setGameState('LOGIN');
-      }
-    );
+    setUser({ nickname, role });
+    setGameState('PLAYING');
+    // ❌ 여기서 socketService.connect 하지 않음! (GameContainer가 할 예정)
   };
 
   const handleLeave = () => {
@@ -40,23 +24,13 @@ const App: React.FC = () => {
 
   return (
     <div className="w-full h-screen bg-[#1a1a1a] overflow-hidden relative">
-      {gameState === 'LOGIN' || gameState === 'CONNECTING' ? (
+      {gameState === 'LOGIN' ? (
         <div className="relative z-10">
           <LoginScreen onJoin={handleJoin} />
-          {gameState === 'CONNECTING' && (
-            <div className="fixed inset-0 bg-black/50 flex flex-col items-center justify-center z-50">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mb-4"></div>
-              <p className="text-white font-bold">서버에 연결 중...</p>
-            </div>
-          )}
-          {error && (
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-full shadow-lg font-bold animate-bounce z-50">
-              {error}
-            </div>
-          )}
         </div>
       ) : (
         <>
+          {/* 2. 화면이 바뀌면서 GameContainer가 마운트됨 -> 이때 소켓 연결 시작! */}
           <GameContainer 
             nickname={user?.nickname || 'Player'} 
             role={user?.role || 'HALL_SERVER'} 

@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
         allowedHosts: true,
         proxy: {
               // '/ws'로 시작하는 요청은 8080번 포트로 보냄
-              '/ws': {
+              '/ws-snowpeak': {
                 target: 'http://localhost:8080',
                 changeOrigin: true,
                 ws: true, // WebSocket 프로토콜 지원 설정 (중요!)

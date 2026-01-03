@@ -1,11 +1,8 @@
-
-import { Client, Message } from '@stomp/stompjs';
+import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { GameMessage } from '../types';
 
 class SocketService {
-  private client: Client | null = null;
-  private subscribers: ((msg: any) => void)[] = [];
+  public client: Client | null = null;
   private static instance: SocketService;
 
   private constructor() {}
@@ -17,52 +14,28 @@ class SocketService {
     return SocketService.instance;
   }
 
-  public connect(nickname: string, role: string, onConnected: () => void, onError: (err: any) => void) {
-    // 백엔드 엔드포인트: /ws-snowpeak
-    const socket = new SockJS('/ws-snowpeak');
+  // 1. 연결 함수 (심플하게 변경)
+  public connect(url: string, onConnected: () => void, onError: (err: any) => void) {
+    // 이미 연결되어 있으면 바로 콜백 실행
+    if (this.client && this.client.connected) {
+      onConnected();
+      return;
+    }
+
+    const socket = new SockJS(url); // 예: 'http://localhost:8080/ws-snowpeak'
     
     this.client = new Client({
       webSocketFactory: () => socket,
       debug: (str) => console.log('[STOMP] ' + str),
       reconnectDelay: 5000,
-      heartbeatIncoming: 4000,
-      heartbeatOutgoing: 4000,
-      // SockJS를 사용할 때 필요한 프로토콜 호환성 설정
-      onConnect: (frame) => {
-        console.log('STOMP Connected');
-        
-        // 1. 공통 룸 구독
-        this.client?.subscribe('/topic/room.1', (message: Message) => {
-          try {
-            const payload = JSON.parse(message.body);
-            this.notifySubscribers(payload);
-          } catch (e) {
-            console.error('Message Parse Error', e);
-          }
-        });
-
-        // 2. 개인 큐 구독 (신규 접속 시 기존 플레이어 목록 수신용)
-        this.client?.subscribe('/user/queue/players', (message: Message) => {
-          try {
-            const payload = JSON.parse(message.body);
-            this.notifySubscribers(payload);
-          } catch (e) {
-            console.error('Queue Parse Error', e);
-          }
-        });
-
-        // 3. 접속 메시지 전송 (@MessageMapping("/join"))
-        this.sendMessage('/app/join', {
-          nickname: nickname,
-          role: role.toUpperCase(),
-          x: 400,
-          y: 300
-        });
-
-        onConnected();
+      
+      onConnect: () => {
+        console.log('✅ STOMP 연결 성공!');
+        onConnected(); // 연결 되자마자 게임컨테이너한테 알림!
       },
+      
       onStompError: (frame) => {
-        console.error('STOMP Error:', frame);
+        console.error('❌ STOMP 에러:', frame);
         onError(frame.headers['message']);
       }
     });
@@ -70,30 +43,44 @@ class SocketService {
     this.client.activate();
   }
 
-  public disconnect() {
-    if (this.client) {
-      this.client.deactivate();
+  // 2. 구독 함수 (토픽, 콜백 받음)
+  public subscribe(topic: string, callback: (msg: any) => void) {
+    if (!this.client || !this.client.connected) {
+      console.warn('⚠️ 소켓이 연결되지 않아 구독 실패:', topic);
+      return () => {};
     }
+
+    const subscription = this.client.subscribe(topic, (message) => {
+      if (message.body) {
+        try {
+          const body = JSON.parse(message.body);
+          callback(body);
+        } catch (e) {
+          console.error('JSON 파싱 에러:', e);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }
 
+  // 3. 전송 함수
   public sendMessage(destination: string, body: any) {
     if (this.client && this.client.connected) {
       this.client.publish({
         destination,
         body: JSON.stringify(body),
       });
+    } else {
+      console.warn('⚠️ 전송 실패 (연결 안됨):', destination);
     }
   }
 
-  public subscribe(callback: (msg: any) => void) {
-    this.subscribers.push(callback);
-    return () => {
-      this.subscribers = this.subscribers.filter(s => s !== callback);
-    };
-  }
-
-  private notifySubscribers(msg: any) {
-    this.subscribers.forEach(callback => callback(msg));
+  public disconnect() {
+    if (this.client) {
+      this.client.deactivate();
+      console.log('🔌 연결 해제');
+    }
   }
 }
 
