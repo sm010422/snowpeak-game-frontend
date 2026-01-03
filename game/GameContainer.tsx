@@ -1,5 +1,4 @@
-
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo} from 'react';
 import * as THREE from 'three';
 import { socketService } from '../services/SocketService';
 import { Avatar } from './Avatar';
@@ -29,29 +28,42 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const activeRef = useRef<boolean>(true);
   const sceneRef = useRef<THREE.Scene | null>(null);
 
+  const tempVector = useMemo(() => new THREE.Vector3(), []);
+  const tempInputDir = useMemo(() => new THREE.Vector3(), []);
+  const cameraOffset = useMemo(() => new THREE.Vector3(18, 22, 18), []);
+
   // 3. 플레이어 업데이트 처리 로직 (함수형 업데이트 적용)
+// 3. 플레이어 업데이트 처리 로직 (성능 최적화 버전)
   const handleIncomingUpdate = useCallback((data: any) => {
     const pid = data.playerId || data.nickname;
     if (!pid || pid === nickname) return;
 
-    // 함수형 업데이트를 사용하여 이전 상태(prev)를 기반으로 안전하게 병합
-    setPlayerRegistry((prev) => {
-      // 이미 존재하는 플레이어고 좌표만 바뀐 경우, 3D 객체에 즉시 반영 (React 렌더링 없이)
-      const avatar = otherAvatarsRef.current.get(pid);
-      if (avatar && data.x !== undefined) {
-        avatar.targetPos.set(data.x / 100, 0, data.y / 100);
-        if (data.direction) avatar.targetRotation = parseFloat(data.direction);
-      }
+    // [최적화] 이미 있는 유저가 '이동'만 한 경우 -> 리액트 렌더링 건너뜀 (Ref만 수정)
+    const avatar = otherAvatarsRef.current.get(pid);
+    if (avatar && data.status !== 'LEAVE') {
+        if (data.x !== undefined) {
+            avatar.targetPos.set(data.x / 100, 0, data.y / 100);
+            if (data.direction) {
+                avatar.targetRotation = parseFloat(data.direction);
+            }
+        }
+        return; // ★ 여기서 함수 종료! (setPlayerRegistry 호출 안 함)
+    }
 
-      // 새로운 플레이어거나 정보가 변경된 경우 상태 업데이트
-      if (!prev[pid]) {
-        return {
-          ...prev,
-          [pid]: data as PlayerState
-        };
+    // 새로운 유저(JOIN)거나 나간 유저(LEAVE)인 경우에만 상태 업데이트
+    setPlayerRegistry((prev) => {
+      if (data.status === 'LEAVE') {
+          const newState = { ...prev };
+          delete newState[pid];
+          return newState;
       }
-      return prev; // 이동 데이터는 Avatar 인스턴스가 처리하므로 상태 변경 최소화
-    }, []);
+      if (prev[pid]) return prev; // 이미 있으면 패스
+
+      return {
+        ...prev,
+        [pid]: data as PlayerState
+      };
+    });
   }, [nickname]);
 
   useEffect(() => {
@@ -87,6 +99,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     let lastNetSync = 0;
     const lastSentPosition = new THREE.Vector3();
 
+// useEffect 안쪽의 update 함수
     const update = () => {
       if (!activeRef.current) return;
       const deltaTime = clockRef.current.getDelta();
@@ -97,39 +110,44 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         if (obj.userData.bladeGroup) obj.userData.bladeGroup.rotation.z += deltaTime * 3;
       });
 
-      // 내 캐릭터 이동 로직
+      // 내 캐릭터 이동 로직 (최적화됨)
       if (myAvatarRef.current) {
         const avatar = myAvatarRef.current;
-        const inputDir = new THREE.Vector3(0, 0, 0);
-        if (keysRef.current['w'] || keysRef.current['arrowup']) inputDir.z -= 1;
-        if (keysRef.current['s'] || keysRef.current['arrowdown']) inputDir.z += 1;
-        if (keysRef.current['a'] || keysRef.current['arrowleft']) inputDir.x -= 1;
-        if (keysRef.current['d'] || keysRef.current['arrowright']) inputDir.x += 1;
+        
+        // [수정] new Vector3() 대신 tempInputDir 재사용
+        tempInputDir.set(0, 0, 0);
+        if (keysRef.current['w'] || keysRef.current['arrowup']) tempInputDir.z -= 1;
+        if (keysRef.current['s'] || keysRef.current['arrowdown']) tempInputDir.z += 1;
+        if (keysRef.current['a'] || keysRef.current['arrowleft']) tempInputDir.x -= 1;
+        if (keysRef.current['d'] || keysRef.current['arrowright']) tempInputDir.x += 1;
 
-        if (inputDir.length() > 0) {
-          inputDir.normalize();
-          velocity.lerp(inputDir.multiplyScalar(moveSpeed), 0.25);
+        if (tempInputDir.lengthSq() > 0) {
+          tempInputDir.normalize();
+          velocity.lerp(tempInputDir.multiplyScalar(moveSpeed), 0.25);
           avatar.group.rotation.y = THREE.MathUtils.lerp(avatar.group.rotation.y, Math.atan2(velocity.x, velocity.z), 0.2);
         } else {
-          velocity.lerp(new THREE.Vector3(0, 0, 0), 0.25);
+          // [수정] 0,0,0 만들지 않고 set 사용
+          velocity.lerp(tempVector.set(0, 0, 0), 0.25);
         }
 
         avatar.group.position.add(velocity.clone().multiplyScalar(deltaTime));
-        avatar.updateAnimation(elapsedTime, velocity.length() > 0.8);
+        avatar.updateAnimation(elapsedTime, velocity.lengthSq() > 0.5);
 
-        // 카메라 추적
-        camera.position.lerp(avatar.group.position.clone().add(new THREE.Vector3(18, 22, 18)), 0.08);
+        // 카메라 추적 (최적화됨)
+        // [수정] clone()과 new Vector3() 제거
+        tempVector.copy(avatar.group.position).add(cameraOffset);
+        camera.position.lerp(tempVector, 0.08);
         camera.lookAt(avatar.group.position);
 
-        // 네트워크 전송 (100ms 쓰로틀링)
+        // 네트워크 전송 (쓰로틀링)
         const now = performance.now();
-        if (now - lastNetSync > 100) {
-          if (avatar.group.position.distanceTo(lastSentPosition) > 0.05) {
+        if (now - lastNetSync > 80) { // 100ms -> 80ms (반응성 향상)
+          if (avatar.group.position.distanceToSquared(lastSentPosition) > 0.0025) {
             socketService.sendMessage('/app/update', {
               playerId: nickname, nickname,
               x: Math.round(avatar.group.position.x * 100),
               y: Math.round(avatar.group.position.z * 100),
-              direction: avatar.group.rotation.y.toString(),
+              direction: avatar.group.rotation.y.toFixed(2),
               role: role.toUpperCase(), roomId: "1"
             });
             lastNetSync = now;
@@ -138,11 +156,11 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         }
       }
 
-      // 타인 캐릭터 보간 및 애니메이션
+      // 타인 캐릭터 보간
       otherAvatarsRef.current.forEach((other) => {
-        const oldPos = other.group.position.clone();
-        other.lerpToTarget(0.15);
-        other.updateAnimation(elapsedTime, other.group.position.distanceTo(oldPos) > 0.02);
+        const oldPos = other.group.position.clone(); // 여기 clone은 비교용이라 유지
+        other.lerpToTarget(0.2); // 보간 속도 약간 올림
+        other.updateAnimation(elapsedTime, other.group.position.distanceToSquared(oldPos) > 0.0004);
       });
 
       renderer.render(scene, camera);
