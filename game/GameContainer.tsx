@@ -53,6 +53,13 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
       const deltaTime = clockRef.current.getDelta();
       const elapsedTime = clockRef.current.getElapsedTime();
 
+// 👇 [여기 추가] 누락된 풍차/환경 애니메이션 로직 복구
+      sceneRef.current?.traverse((obj) => {
+        if (obj.userData.bladeGroup) {
+            obj.userData.bladeGroup.rotation.z += deltaTime * 3;
+        }
+      });
+
       // (1) 내 캐릭터 이동
       if (myAvatarRef.current) {
         const avatar = myAvatarRef.current;
