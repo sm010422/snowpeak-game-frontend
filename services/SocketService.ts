@@ -19,7 +19,7 @@ class SocketService {
 
   public connect(nickname: string, role: string, onConnected: () => void, onError: (err: any) => void) {
     // 백엔드 엔드포인트: /ws-snowpeak
-    const socket = new SockJS('http://localhost:8080/ws-snowpeak');
+    const socket = new SockJS('/ws-snowpeak');
     
     this.client = new Client({
       webSocketFactory: () => socket,
