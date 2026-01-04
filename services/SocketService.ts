@@ -26,7 +26,7 @@ class SocketService {
     
     this.client = new Client({
       webSocketFactory: () => socket,
-      debug: (str) => console.log('[STOMP] ' + str),
+      // debug: (str) => console.log('[STOMP] ' + str),
       reconnectDelay: 5000,
       
       onConnect: () => {
@@ -75,6 +75,18 @@ class SocketService {
       console.warn('⚠️ 전송 실패 (연결 안됨):', destination);
     }
   }
+
+  public sendBinaryMessage(destination: string, binaryData: Uint8Array) {
+      if (this.client && this.client.connected) {
+        this.client.publish({
+          destination: destination,
+          binaryBody: binaryData, // body 대신 binaryBody를 사용합니다.
+          // headers: { 'content-type': 'application/octet-stream' } // 필요시 헤더 추가
+        });
+      } else {
+        console.warn('⚠️ 바이너리 전송 실패 (연결 안됨):', destination);
+      }
+    }
 
   public disconnect() {
     if (this.client) {
