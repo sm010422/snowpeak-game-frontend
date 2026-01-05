@@ -27,6 +27,9 @@ export const useThreeScene = () => {
       alpha: true,
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
     renderer.shadowMap.enabled = true;
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -36,6 +39,22 @@ export const useThreeScene = () => {
 
     // 4. 환경(조명 등) 생성
     new Environment(scene);
+
+    const handleResize = () => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // 1. 카메라 비율 업데이트 (찌그러짐 방지)
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+
+        // 2. 렌더러(화면) 크기 업데이트 (여백 방지)
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      };
+
+    // 브라우저 크기가 변하면 handleResize 실행
+    window.addEventListener("resize", handleResize);
 
     // 정리(Cleanup)
     return () => {
