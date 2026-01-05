@@ -48,6 +48,7 @@ export class Environment {
     this.createWindmill(-15, 15);
   }
 
+  //나무 만들기
   private createTree(x: number, z: number) {
     const group = new THREE.Group();
     const trunk = new THREE.Mesh(
@@ -68,6 +69,7 @@ export class Environment {
     this.scene.add(group);
   }
 
+  //성 만들기
   private createCastle(x: number, z: number) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(
@@ -90,6 +92,7 @@ export class Environment {
     this.scene.add(group);
   }
 
+  //풍차 만들기
   private createWindmill(x: number, z: number) {
     const group = new THREE.Group();
     const base = new THREE.Mesh(
