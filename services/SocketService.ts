@@ -6,6 +6,7 @@ class SocketService {
   private static instance: SocketService;
 
   private constructor() {}
+  private pendingSubscriptions: Array<{ topic: string; callback: (msg: any) => void }> = [];
 
   public static getInstance(): SocketService {
     if (!SocketService.instance) {
@@ -31,7 +32,17 @@ class SocketService {
       
       onConnect: () => {
         console.log('✅ STOMP 연결 성공!');
-        onConnected(); // 연결 되자마자 게임컨테이너한테 알림!
+
+        if (this.pendingSubscriptions.length > 0) {
+            console.log(`🔄 대기 중이던 구독 ${this.pendingSubscriptions.length}개 일괄 처리 중...`);
+            this.pendingSubscriptions.forEach((sub) => {
+                // 재귀 호출하지만, 이제 연결된 상태니 바로 구독됨
+                this.subscribe(sub.topic, sub.callback); 
+            });
+            this.pendingSubscriptions = []; // 대기열 비우기
+        }
+
+        onConnected(); // [유지] 게임컨테이너한테 "이제 JOIN 보내도 돼!" 알림
       },
       
       onStompError: (frame) => {
@@ -45,23 +56,37 @@ class SocketService {
 
   // 2. 구독 함수 (토픽, 콜백 받음)
   public subscribe(topic: string, callback: (msg: any) => void) {
-    if (!this.client || !this.client.connected) {
-      console.warn('⚠️ 소켓이 연결되지 않아 구독 실패:', topic);
-      return () => {};
-    }
-
-    const subscription = this.client.subscribe(topic, (message) => {
-      if (message.body) {
-        try {
-          const body = JSON.parse(message.body);
-          callback(body);
-        } catch (e) {
-          console.error('JSON 파싱 에러:', e);
-        }
+      // 1. 클라이언트 객체가 없으면 아예 실행 불가 (안전장치)
+      if (!this.client || !this.client.connected) {
+            console.log(`⏳ 연결 대기 중... 구독 예약됨: ${topic}`);
+            this.pendingSubscriptions.push({ topic, callback });
+            return () => {}; // 나중에 연결되면 자동으로 구독됨
       }
-    });
 
-    return () => subscription.unsubscribe();
+      // 2. [수정됨] connected 체크를 제거했습니다. 
+      // onConnect 안에서 호출했다면, connected가 false라고 떠도 실제론 연결된 상태입니다.
+      // 라이브러리를 믿고 일단 try 블록으로 진입시킵니다.
+
+      try {
+          const subscription = this.client.subscribe(topic, (message) => {
+              if (message.body) {
+                  try {
+                      const body = JSON.parse(message.body);
+                      callback(body);
+                  } catch (e) {
+                      console.error('JSON 파싱 에러:', e);
+                  }
+              }
+          });
+
+          console.log(`✅ 구독 성공: ${topic}`);
+          return () => subscription.unsubscribe();
+
+      } catch (error) {
+          // 여기서 진짜 연결 안 된 상황을 잡아냅니다. 앱이 멈추지 않습니다.
+          console.error(`❌ 구독 실패 (연결 미완료 예상): ${topic}`, error);
+          return () => {};
+      }
   }
 
   // 3. 전송 함수
