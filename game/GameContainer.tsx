@@ -47,9 +47,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     let lastNetSync = 0;
     const lastSentPosition = new THREE.Vector3();
 
-    const moveBuffer = new ArrayBuffer(12); // X(4) + Y(4) + Dir(4) = 12 Bytes
-    const moveView = new DataView(moveBuffer);
-
     // 애니메이션 루프
     const update = () => {
       if (!activeRef.current) return;
@@ -89,22 +86,19 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
         // 네트워크 전송
         const now = performance.now();
-          if (now - lastNetSync > 80) { // 80ms 마다 전송
-            // 아주 미세한 움직임은 무시 (0.0025)
-            if (avatar.group.position.distanceToSquared(lastSentPosition) > 0.0025) {
-              
-              // 1. 미리 만들어둔 버퍼에 현재 값 덮어쓰기
-              moveView.setFloat32(0, avatar.group.position.x); // Offset 0: X좌표
-              moveView.setFloat32(4, avatar.group.position.z); // Offset 4: Y좌표 (3D의 Z)
-              moveView.setFloat32(8, avatar.group.rotation.y); // Offset 8: 방향
-
-              // 2. 바이너리 전송 (SocketService에 sendBinaryMessage가 있어야 함)
-              socketService.sendBinaryMessage('/app/update', new Uint8Array(moveBuffer));
-
-              lastNetSync = now;
-              lastSentPosition.copy(avatar.group.position);
-            }
+        if (now - lastNetSync > 80) {
+          if (avatar.group.position.distanceToSquared(lastSentPosition) > 0.0025) {
+            socketService.sendMessage('/app/update', {
+              playerId: nickname, nickname,
+              x: Math.round(avatar.group.position.x * 100),
+              y: Math.round(avatar.group.position.z * 100),
+              direction: avatar.group.rotation.y.toFixed(2),
+              role: role.toUpperCase(), roomId: "1"
+            });
+            lastNetSync = now;
+            lastSentPosition.copy(avatar.group.position);
           }
+        }
       }
 
       // (2) 다른 플레이어 보간
