@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { socketService } from '../services/SocketService';
+import { Environment } from './Environment';
 import { Avatar } from './Avatar';
 import { useKeyboard } from '../hooks/userKeyboard';
 import { useThreeScene } from '../hooks/useThreeScene';   // [1]
@@ -22,6 +23,8 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const clockRef = useRef<THREE.Clock>(new THREE.Clock());
   const activeRef = useRef<boolean>(true);
   
+  const environmentRef = useRef<Environment | null>(null);
+
   // 내 캐릭터는 입력 반응성을 위해 여기서 직접 관리
   const myAvatarRef = useRef<Avatar | null>(null);
 
@@ -35,6 +38,10 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
     activeRef.current = true;
 
+    //  환경(맵) 초기화 및 Ref에 저장
+    const environment = new Environment(sceneRef.current);
+    environmentRef.current = environment;
+
     // 내 캐릭터 생성
     const myColor = role === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
     const myAvatar = new Avatar(myColor, nickname);
@@ -42,8 +49,8 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     myAvatarRef.current = myAvatar;
 
     // 변수 초기화
-    const velocity = new THREE.Vector3();
-    const moveSpeed = 22;
+    // const velocity = new THREE.Vector3();
+    // const moveSpeed = 22;
     let lastNetSync = 0;
     const lastSentPosition = new THREE.Vector3();
 
@@ -61,7 +68,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
       });
 
       // (1) 내 캐릭터 이동
-      if (myAvatarRef.current) {
+      if (myAvatarRef.current && environmentRef.current) {
         const avatar = myAvatarRef.current;
         tempInputDir.set(0, 0, 0);
         if (keysRef.current['w'] || keysRef.current['arrowup']) tempInputDir.z -= 1;
@@ -69,15 +76,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         if (keysRef.current['a'] || keysRef.current['arrowleft']) tempInputDir.x -= 1;
         if (keysRef.current['d'] || keysRef.current['arrowright']) tempInputDir.x += 1;
 
-        if (tempInputDir.lengthSq() > 0) {
-          tempInputDir.normalize();
-          velocity.lerp(tempInputDir.multiplyScalar(moveSpeed), 0.25);
-          avatar.group.rotation.y = THREE.MathUtils.lerp(avatar.group.rotation.y, Math.atan2(velocity.x, velocity.z), 0.2);
-        } else {
-          velocity.lerp(tempVector.set(0, 0, 0), 0.25);
-        }
-        avatar.group.position.add(velocity.clone().multiplyScalar(deltaTime));
-        avatar.updateAnimation(elapsedTime, velocity.lengthSq() > 0.5);
+        avatar.update(deltaTime, environmentRef.current.mapObjects, tempInputDir);
 
         // 카메라 추적
         tempVector.copy(avatar.group.position).add(cameraOffset);
@@ -141,6 +140,13 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
     return () => {
       activeRef.current = false;
+
+      if (environmentRef.current) {
+
+        environmentRef.current.loadMap({ init:()=>{}, update:()=>{}, dispose:()=>{} } as any); // null 처리 혹은 dispose 호출
+      }
+
+
       if (unsubscribeTopic) unsubscribeTopic();
       if (unsubscribePrivate) unsubscribePrivate();
       
