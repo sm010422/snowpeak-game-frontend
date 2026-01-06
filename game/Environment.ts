@@ -2,16 +2,20 @@
 import * as THREE from 'three';
 import { IGameMap } from './maps/IGameMap';
 import { SnowMap } from './maps/SnowMap';
+import { CafeAndDining } from './maps/CafeAndDining';
 
 export class Environment {
   private scene: THREE.Scene;
   private currentMap: IGameMap | null = null;
 
+  public mapObjects: THREE.Object3D[] = [];
+
   constructor(scene: THREE.Scene) {
     this.scene = scene;
     
     // 기본으로 SnowMap을 로드
-    this.loadMap(new SnowMap());
+    // this.loadMap(new SnowMap());
+    this.loadMap(new CafeAndDining(this.mapObjects));
   }
 
   public loadMap(map: IGameMap) {
