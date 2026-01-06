@@ -77,7 +77,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onJoin }) => {
         </div>
 
         <div className="mt-8 pt-6 border-t border-[#efebe9] text-center">
-          <p className="text-xs text-[#a1887f] font-medium">Built with React & Phaser 3</p>
+          <p className="text-xs text-[#a1887f] font-medium">Built with React & ThreeJS</p>
         </div>
       </div>
     </div>
