@@ -17,7 +17,7 @@ export const useThreeScene = () => {
     sceneRef.current = scene;
 
     // 2. 카메라 생성
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     cameraRef.current = camera;
 
     // 3. 렌더러 생성
@@ -40,6 +40,7 @@ export const useThreeScene = () => {
     // 4. 환경(조명 등) 생성
     new Environment(scene);
 
+    // 5. 브라우저 창 사이즈 조절
     const handleResize = () => {
         const width = window.innerWidth;
         const height = window.innerHeight;

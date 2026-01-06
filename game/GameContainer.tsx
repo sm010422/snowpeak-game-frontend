@@ -28,7 +28,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   // 최적화 변수들
   const tempVector = useMemo(() => new THREE.Vector3(), []);
   const tempInputDir = useMemo(() => new THREE.Vector3(), []);
-  const cameraOffset = useMemo(() => new THREE.Vector3(18, 22, 18), []);
+  const cameraOffset = useMemo(() => new THREE.Vector3(0, 22, 18), []);
 
   // 2. 메인 게임 루프 & 소켓 연결
   useEffect(() => {
