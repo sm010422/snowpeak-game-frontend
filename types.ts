@@ -14,7 +14,7 @@ export interface PlayerState {
 }
 
 export interface GameMessage {
-  type: 'JOIN' | 'MOVE' | 'LEAVE' | 'CHAT';
+  type: 'JOIN' | 'MOVE' | 'LEAVE' | 'CHAT' | 'SYNC';
   playerId: string;
   nickname?: string;
   role?: PlayerRole | string;
@@ -25,4 +25,5 @@ export interface GameMessage {
   direction?: string;
   animState?: AnimState;
   roomId?: string;
+  players?: PlayerState[];
 }

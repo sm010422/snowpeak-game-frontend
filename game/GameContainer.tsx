@@ -127,7 +127,16 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
             });
 
             unsubscribePrivate = socketService.subscribe(`/topic/private/${nickname}`, (msg: any) => {
-                if (Array.isArray(msg)) msg.forEach(p => handleIncomingUpdate(p));
+                if (msg.type === 'SYNC' && Array.isArray(msg.players)) {
+                  console.log("👥 기존 플레이어 목록 동기화:", msg.players);
+                  msg.players.forEach((player: any) => {
+                      // "나"는 제외하고 처리
+                      if (player.nickname !== nickname) {
+                          handleIncomingUpdate(player); 
+                      }
+                  });
+                }
+                else if (Array.isArray(msg)) msg.forEach(p => handleIncomingUpdate(p));
                 else handleIncomingUpdate(msg);
             });
 
