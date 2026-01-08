@@ -48,7 +48,7 @@ export class CafeAndDining implements IGameMap {
       if (item.mesh) {
         this.scene!.remove(item.mesh); // 씬에서 제거
         item.mesh.geometry.dispose();  // 지오메트리 메모리 해제
-        
+
         // 재질(Material) 메모리 해제
         if (Array.isArray(item.mesh.material)) {
           item.mesh.material.forEach(m => m.dispose());
@@ -69,6 +69,10 @@ export class CafeAndDining implements IGameMap {
         if (item.light.shadow && item.light.shadow.map) {
             item.light.shadow.map.dispose(); // 그림자 맵 해제
         }
+      }
+
+      if (item.texture) {
+        item.texture.dispose();
       }
     });
 
@@ -112,10 +116,17 @@ export class CafeAndDining implements IGameMap {
     if (!this.scene) return;
 
     const geometry = new THREE.PlaneGeometry(this.FLOOR_SIZE_X, this.FLOOR_SIZE_Z);
-    const material = new THREE.MeshStandardMaterial({ 
-      color: 0xdbcbbd, 
-      roughness: 0.8,
-      side: THREE.DoubleSide
+
+    const tileTex = this.createTileTexture(512);
+    // 월드 크기에 맞춰 반복 횟수 조절 (타일 한 칸을 대략 2유닛로 가정)
+    const TILE_WORLD_SIZE = 2;
+    tileTex.repeat.set(this.FLOOR_SIZE_X / TILE_WORLD_SIZE, this.FLOOR_SIZE_Z / TILE_WORLD_SIZE);
+
+    const material = new THREE.MeshStandardMaterial({
+      map: tileTex,
+      roughness: 0.85,
+      metalness: 0.0,
+      side: THREE.DoubleSide,
     });
 
     const floor = new THREE.Mesh(geometry, material);
@@ -124,79 +135,85 @@ export class CafeAndDining implements IGameMap {
     floor.receiveShadow = true;
 
     this.scene.add(floor);
-    // 바닥은 충돌체 목록에 넣지 않는다면 _disposables에만 추가
-    this._disposables.push({ mesh: floor });
+
+    // 텍스처도 dispose 대상에 추가
+    this._disposables.push({ mesh: floor, texture: tileTex });
   }
 
   private createWalls(): void {
-      // 벽 타입 정의 (오타 방지를 위해 상수나 Enum 사용 추천)
-      const WALL_TYPES = {
-        DEFAULT: 'default',
-        BLUE: 'blue',
-        GLASS: 'glass',
-        CONCRETE: 'concrete'
-      };
+    const WALL_TYPES = {
+      DEFAULT: "default",
+      BLUE: "blue",
+      GLASS: "glass",
+      CONCRETE: "concrete",
+    };
 
-      // 1. 재질(Material) 라이브러리 생성
-      const materials = {
-        [WALL_TYPES.DEFAULT]: new THREE.MeshStandardMaterial({
-          color: 0x912727,
-          roughness: 0.5
-        }),
-        [WALL_TYPES.BLUE]: new THREE.MeshStandardMaterial({
-          color: 0x274591, // 파란색
-          roughness: 0.3
-        }),
-        [WALL_TYPES.CONCRETE]: new THREE.MeshStandardMaterial({
-          color: 0x808080, // 회색
-          roughness: 0.9   // 거친 느낌
-        }),
-        // ★ 유리 재질 구현
-        [WALL_TYPES.GLASS]: new THREE.MeshPhysicalMaterial({
-                color: 0xffffff,
-                metalness: 0,
-                roughness: 0,
-                transmission: 1.0,  
-                thickness: 0.5,     
-                transparent: true,
-              })
-      };
+    const brickTex = this.createBrickTexture(512);
+    // 벽돌 한 칸을 대략 1유닛로 가정해서 반복(대충 보기에 자연스러운 값)
+    brickTex.repeat.set(6, 2);
 
-      // 2. 데이터에 'type' 필드 추가: [x, z, width, depth, type?]
-      // type이 없으면 기본값(DEFAULT)을 사용하도록 처리할 예정
-      const wallsData: [number, number, number, number, string?][] = [
-        // 외곽 (기본 붉은 벽)
-        [0, -this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
-        [0, this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
-        [-this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
-        [this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
-        
-        // 상단 룸 (파란 벽으로 포인트)
-        [0, -30, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.BLUE], 
-        [-10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.BLUE], 
-        [10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.BLUE],
+    // 필요하면 벽 타입별 반복을 다르게 하고 싶을 때는,
+    // 지금은 간단히 공용으로 씁니다.
 
-        // 하단 룸 (유리벽으로 구현!)
-        [0, 35, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.GLASS],
-        [-15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
-        [15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
+    const materials = {
+      [WALL_TYPES.DEFAULT]: new THREE.MeshStandardMaterial({
+        map: brickTex,
+        color: 0xffffff,     // 텍스처 원색 그대로
+        roughness: 0.75,
+        metalness: 0.0,
+      }),
+      [WALL_TYPES.BLUE]: new THREE.MeshStandardMaterial({
+        map: brickTex,
+        color: 0x8fb0ff,     // 벽돌 위에 파란 페인트 느낌(틴트)
+        roughness: 0.7,
+        metalness: 0.0,
+      }),
+      [WALL_TYPES.CONCRETE]: new THREE.MeshStandardMaterial({
+        // 콘크리트는 그대로 두고 싶으면 map 제거하셔도 됩니다
+        map: brickTex,
+        color: 0xd0d0d0,
+        roughness: 0.9,
+        metalness: 0.0,
+      }),
+      [WALL_TYPES.GLASS]: new THREE.MeshPhysicalMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0,
+        transmission: 1.0,
+        thickness: 0.5,
+        transparent: true,
+      }),
+    };
 
-        // 중앙 파티션 (콘크리트 느낌)
-        [-10, 0, 15, this.WALL_THICKNESS, WALL_TYPES.CONCRETE],
-        [-17.5, 5, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE], 
-        [10, 10, 15, this.WALL_THICKNESS, WALL_TYPES.CONCRETE], 
-        [17.5, 15, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE],
-      ];
+    // 텍스처 dispose 대상 등록(공용이니 한 번만)
+    this._disposables.push({ texture: brickTex });
 
-      // 3. 루프에서 재질 선택 로직 추가
-      wallsData.forEach(([x, z, w, d, type]) => {
-        // type이 지정되어 있으면 그 재질을, 없으면 DEFAULT 재질 사용
-        const materialKey = type || WALL_TYPES.DEFAULT;
-        const selectedMaterial = materials[materialKey];
+    const wallsData: [number, number, number, number, string?][] = [
+      [0, -this.FLOOR_SIZE_Z / 2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+      [0, this.FLOOR_SIZE_Z / 2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+      [-this.FLOOR_SIZE_X / 2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
+      [this.FLOOR_SIZE_X / 2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
 
-        this.createWallMesh(x, z, w, d, selectedMaterial);
-      });
-    }
+      [0, -30, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+      [-10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.DEFAULT],
+      [10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.DEFAULT],
+
+      [0, 35, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.GLASS],
+      [-15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
+      [15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
+
+      [-10, 0, 15, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+      [-17.5, 5, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE],
+      [10, 10, 15, this.WALL_THICKNESS, WALL_TYPES.CONCRETE],
+      [17.5, 15, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE],
+    ];
+
+    wallsData.forEach(([x, z, w, d, type]) => {
+      const materialKey = type || WALL_TYPES.DEFAULT;
+      const selectedMaterial = materials[materialKey];
+      this.createWallMesh(x, z, w, d, selectedMaterial);
+    });
+  }
 
   private createWallMesh(x: number, z: number, w: number, d: number, material: THREE.Material): void {
     if (!this.scene) return;
@@ -211,5 +228,140 @@ export class CafeAndDining implements IGameMap {
     this.scene.add(wall);
     this.mapObjects.push(wall); // 충돌 리스트 추가
     this._disposables.push({ mesh: wall }); // 메모리 관리 리스트 추가
+  }
+
+  private setTextureColorSpace(tex: THREE.Texture) {
+    // three 버전 호환: 최신은 colorSpace, 구버전은 encoding
+    const anyTex = tex as any;
+    if (anyTex.colorSpace !== undefined && (THREE as any).SRGBColorSpace) {
+      anyTex.colorSpace = (THREE as any).SRGBColorSpace;
+    } else if (anyTex.encoding !== undefined && (THREE as any).sRGBEncoding) {
+      anyTex.encoding = (THREE as any).sRGBEncoding;
+    }
+  }
+
+  private createTileTexture(size = 512) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext("2d")!;
+    // 베이스 색
+    ctx.fillStyle = "#dbcbbd";
+    ctx.fillRect(0, 0, size, size);
+
+    // 아주 약한 노이즈(단색 느낌 줄이기)
+    const img = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 10; // -5 ~ +5
+      img.data[i] = Math.min(255, Math.max(0, img.data[i] + n));
+      img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
+      img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    // 타일 줄(그라우트)
+    const tiles = 8; // 한 장의 텍스처 안 타일 개수
+    const step = size / tiles;
+    ctx.strokeStyle = "rgba(120, 110, 100, 0.55)";
+    ctx.lineWidth = 2;
+
+    for (let i = 0; i <= tiles; i++) {
+      const p = Math.round(i * step) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(p, 0);
+      ctx.lineTo(p, size);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p);
+      ctx.stroke();
+    }
+
+    // 타일 경계 살짝 하이라이트
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= tiles; i++) {
+      const p = Math.round(i * step) + 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p, 0);
+      ctx.lineTo(p, size);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, p);
+      ctx.lineTo(size, p);
+      ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    this.setTextureColorSpace(tex);
+    tex.needsUpdate = true;
+
+    return tex;
+  }
+
+  private createBrickTexture(size = 512) {
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext("2d")!;
+
+    // 모르타르(줄눈) 베이스
+    ctx.fillStyle = "#d6d2cc";
+    ctx.fillRect(0, 0, size, size);
+
+    const brickW = Math.floor(size / 8);   // 벽돌 가로
+    const brickH = Math.floor(size / 16);  // 벽돌 세로
+    const mortar = 4;
+
+    for (let y = 0; y < size; y += brickH + mortar) {
+      const row = Math.floor(y / (brickH + mortar));
+      const offset = (row % 2) * Math.floor((brickW + mortar) / 2);
+
+      for (let x = -offset; x < size; x += brickW + mortar) {
+        const bx = x + mortar;
+        const by = y + mortar;
+
+        // 벽돌 색 랜덤 변조
+        const baseR = 150 + Math.random() * 30;
+        const baseG = 60 + Math.random() * 20;
+        const baseB = 55 + Math.random() * 20;
+
+        ctx.fillStyle = `rgb(${baseR | 0}, ${baseG | 0}, ${baseB | 0})`;
+        ctx.fillRect(bx, by, brickW, brickH);
+
+        // 약한 음영(입체감)
+        ctx.fillStyle = "rgba(0,0,0,0.10)";
+        ctx.fillRect(bx, by + brickH - 3, brickW, 3);
+
+        ctx.fillStyle = "rgba(255,255,255,0.10)";
+        ctx.fillRect(bx, by, brickW, 2);
+      }
+    }
+
+    // 아주 약한 노이즈
+    const img = ctx.getImageData(0, 0, size, size);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (Math.random() - 0.5) * 8;
+      img.data[i] = Math.min(255, Math.max(0, img.data[i] + n));
+      img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
+      img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
+    }
+    ctx.putImageData(img, 0, 0);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = 8;
+    this.setTextureColorSpace(tex);
+    tex.needsUpdate = true;
+
+    return tex;
   }
 }
