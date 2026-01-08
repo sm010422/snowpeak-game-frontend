@@ -11,7 +11,7 @@ export class CafeAndDining implements IGameMap {
   // 맵 설정 상수
   private readonly WALL_HEIGHT = 4;
   private readonly WALL_THICKNESS = 0.3;
-  private readonly FLOOR_SIZE_X = 60;
+  private readonly FLOOR_SIZE_X = 90;
   private readonly FLOOR_SIZE_Z = 100;
 
   constructor(mapObjects: THREE.Object3D[]) {
@@ -129,40 +129,74 @@ export class CafeAndDining implements IGameMap {
   }
 
   private createWalls(): void {
-    const wallMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.5
-    });
+      // 벽 타입 정의 (오타 방지를 위해 상수나 Enum 사용 추천)
+      const WALL_TYPES = {
+        DEFAULT: 'default',
+        BLUE: 'blue',
+        GLASS: 'glass',
+        CONCRETE: 'concrete'
+      };
 
-    // [x, z, width, depth]
-    const wallsData = [
-      // 외곽
-      [0, -this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS],
-      [0, this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS],
-      [-this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z],
-      [this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z],
-      
-      // 상단 룸
-      [0, -30, this.FLOOR_SIZE_X, this.WALL_THICKNESS], 
-      [-10, -40, this.WALL_THICKNESS, 20], 
-      [10, -40, this.WALL_THICKNESS, 20],
+      // 1. 재질(Material) 라이브러리 생성
+      const materials = {
+        [WALL_TYPES.DEFAULT]: new THREE.MeshStandardMaterial({
+          color: 0x912727,
+          roughness: 0.5
+        }),
+        [WALL_TYPES.BLUE]: new THREE.MeshStandardMaterial({
+          color: 0x274591, // 파란색
+          roughness: 0.3
+        }),
+        [WALL_TYPES.CONCRETE]: new THREE.MeshStandardMaterial({
+          color: 0x808080, // 회색
+          roughness: 0.9   // 거친 느낌
+        }),
+        // ★ 유리 재질 구현
+        [WALL_TYPES.GLASS]: new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                metalness: 0,
+                roughness: 0,
+                transmission: 1.0,  
+                thickness: 0.5,     
+                transparent: true,
+              })
+      };
 
-      // 하단 룸
-      [0, 35, this.FLOOR_SIZE_X, this.WALL_THICKNESS],
-      [-15, 42.5, this.WALL_THICKNESS, 15],
-      [15, 42.5, this.WALL_THICKNESS, 15],
+      // 2. 데이터에 'type' 필드 추가: [x, z, width, depth, type?]
+      // type이 없으면 기본값(DEFAULT)을 사용하도록 처리할 예정
+      const wallsData: [number, number, number, number, string?][] = [
+        // 외곽 (기본 붉은 벽)
+        [0, -this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+        [0, this.FLOOR_SIZE_Z/2, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.DEFAULT],
+        [-this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
+        [this.FLOOR_SIZE_X/2, 0, this.WALL_THICKNESS, this.FLOOR_SIZE_Z, WALL_TYPES.DEFAULT],
+        
+        // 상단 룸 (파란 벽으로 포인트)
+        [0, -30, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.BLUE], 
+        [-10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.BLUE], 
+        [10, -40, this.WALL_THICKNESS, 20, WALL_TYPES.BLUE],
 
-      // 중앙 파티션
-      [-10, 0, 15, this.WALL_THICKNESS],
-      [-17.5, 5, this.WALL_THICKNESS, 10], 
-      [10, 10, 15, this.WALL_THICKNESS], 
-      [17.5, 15, this.WALL_THICKNESS, 10],
-    ];
+        // 하단 룸 (유리벽으로 구현!)
+        [0, 35, this.FLOOR_SIZE_X, this.WALL_THICKNESS, WALL_TYPES.GLASS],
+        [-15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
+        [15, 42.5, this.WALL_THICKNESS, 15, WALL_TYPES.GLASS],
 
-    wallsData.forEach(([x, z, w, d]) => {
-      this.createWallMesh(x, z, w, d, wallMaterial);
-    });
-  }
+        // 중앙 파티션 (콘크리트 느낌)
+        [-10, 0, 15, this.WALL_THICKNESS, WALL_TYPES.CONCRETE],
+        [-17.5, 5, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE], 
+        [10, 10, 15, this.WALL_THICKNESS, WALL_TYPES.CONCRETE], 
+        [17.5, 15, this.WALL_THICKNESS, 10, WALL_TYPES.CONCRETE],
+      ];
+
+      // 3. 루프에서 재질 선택 로직 추가
+      wallsData.forEach(([x, z, w, d, type]) => {
+        // type이 지정되어 있으면 그 재질을, 없으면 DEFAULT 재질 사용
+        const materialKey = type || WALL_TYPES.DEFAULT;
+        const selectedMaterial = materials[materialKey];
+
+        this.createWallMesh(x, z, w, d, selectedMaterial);
+      });
+    }
 
   private createWallMesh(x: number, z: number, w: number, d: number, material: THREE.Material): void {
     if (!this.scene) return;
