@@ -29,9 +29,9 @@ export function createTileTexture(size = 512) {
 
   const tiles = 8;
   const step = size / tiles;
+
   ctx.strokeStyle = "rgba(120,110,100,0.55)";
   ctx.lineWidth = 2;
-
   for (let i = 0; i <= tiles; i++) {
     const p = Math.round(i * step) + 0.5;
     ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, size); ctx.stroke();
@@ -69,11 +69,11 @@ export function createBrickTexture(size = 512) {
       const bx = x + mortar;
       const by = y + mortar;
 
-      const baseR = 150 + Math.random() * 30;
-      const baseG = 60 + Math.random() * 20;
-      const baseB = 55 + Math.random() * 20;
+      const r = 150 + Math.random() * 30;
+      const g = 60 + Math.random() * 20;
+      const b = 55 + Math.random() * 20;
 
-      ctx.fillStyle = `rgb(${baseR | 0}, ${baseG | 0}, ${baseB | 0})`;
+      ctx.fillStyle = `rgb(${r | 0}, ${g | 0}, ${b | 0})`;
       ctx.fillRect(bx, by, brickW, brickH);
 
       ctx.fillStyle = "rgba(0,0,0,0.10)";
