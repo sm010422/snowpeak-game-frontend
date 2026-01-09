@@ -43,7 +43,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     environmentRef.current = environment;
 
     // 내 캐릭터 생성
-    const myColor = role === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
+    const myColor = role.toUpperCase() === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
     const myAvatar = new Avatar(myColor, nickname);
     sceneRef.current.add(myAvatar.group);
     myAvatarRef.current = myAvatar;
@@ -117,12 +117,14 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     let unsubscribeTopic: (() => void) | undefined;
     let unsubscribePrivate: (() => void) | undefined;
 
+    const ROOM_ID = "1";
+
     socketService.connect(
         '/ws-snowpeak',
         () => {
             console.log("🚀 게임 컨테이너: 소켓 연결 성공 & 구독 시작");
 
-            unsubscribeTopic = socketService.subscribe(`/topic/room.1`, (msg: any) => {
+            unsubscribeTopic = socketService.subscribe(`/topic/room.${ROOM_ID}`, (msg: any) => {
                 handleIncomingUpdate(msg);
             });
 
@@ -141,7 +143,23 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
             });
 
             socketService.sendMessage('/app/join', {
-                nickname, x: 0, y: 0, role, direction: "0"
+              playerId: nickname,
+              nickname,
+              x: 0,
+              y: 0,
+              direction: "0",
+              role: role.toUpperCase(),
+              roomId: ROOM_ID,
+            });
+
+            socketService.sendMessage('/app/update', {
+              playerId: nickname,
+              nickname,
+              x: 0,
+              y: 0,
+              direction: "0",
+              role: role.toUpperCase(),
+              roomId: ROOM_ID,
             });
         },
         (err) => console.error("연결 실패:", err)
