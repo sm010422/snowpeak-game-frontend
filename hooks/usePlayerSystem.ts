@@ -1,7 +1,7 @@
 // src/hooks/usePlayerSystem.ts
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { PlayerState } from "../types";
-import { Avatar } from "../game/Avatar";
+import { Avatar } from "../game/avatar/Avatar";
 import * as THREE from "three";
 
 export const usePlayerSystem = (nickname: string, sceneRef: React.MutableRefObject<THREE.Scene | null>) => {

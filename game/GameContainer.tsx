@@ -3,7 +3,9 @@ import React, { useEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { socketService } from '../services/SocketService';
 import { Environment } from './Environment';
-import { Avatar } from './Avatar';
+import { Avatar } from './avatar/Avatar';
+import { LocalAvatarController } from "./avatar/controllers/LocalAvatarController";
+import { RemoteAvatarController } from "./avatar/controllers/RemoteAvatarController";
 import { useKeyboard } from '../hooks/userKeyboard';
 import { useThreeScene } from '../hooks/useThreeScene';   // [1]
 import { usePlayerSystem } from '../hooks/usePlayerSystem'; // [2]
@@ -32,15 +34,22 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
   const tempVector = useMemo(() => new THREE.Vector3(), []);
   const tempInputDir = useMemo(() => new THREE.Vector3(), []);
   const cameraOffset = useMemo(() => new THREE.Vector3(0, 22, 18), []);
+  
+  const localCtrl = useMemo(() => new LocalAvatarController(), []);
+  const remoteCtrl = useMemo(() => new RemoteAvatarController(), []);
+
 
   // 2. 메인 게임 루프 & 소켓 연결
   useEffect(() => {
     if (!sceneRef.current || !cameraRef.current || !rendererRef.current) return;
     activeRef.current = true;
 
+    clockRef.current = new THREE.Clock();
     //  환경(맵) 초기화 및 Ref에 저장
     const environment = new Environment(sceneRef.current);
     environmentRef.current = environment;
+
+    const ROOM_ID = "1";
 
     // 내 캐릭터 생성
     const myColor = role.toUpperCase() === 'BARISTA' ? 0x8b4513 : 0x2e8b57;
@@ -58,14 +67,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     const update = () => {
       if (!activeRef.current) return;
       const deltaTime = clockRef.current.getDelta();
-      const elapsedTime = clockRef.current.getElapsedTime();
-
-// 👇 [여기 추가] 누락된 풍차/환경 애니메이션 로직 복구
-      sceneRef.current?.traverse((obj) => {
-        if (obj.userData.bladeGroup) {
-            obj.userData.bladeGroup.rotation.z += deltaTime * 3;
-        }
-      });
 
       // (1) 내 캐릭터 이동
       if (myAvatarRef.current && environmentRef.current) {
@@ -76,7 +77,8 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
         if (keysRef.current['a'] || keysRef.current['arrowleft']) tempInputDir.x -= 1;
         if (keysRef.current['d'] || keysRef.current['arrowright']) tempInputDir.x += 1;
 
-        avatar.update(deltaTime, environmentRef.current.mapObjects, tempInputDir);
+        // avatar.update(deltaTime, environmentRef.current.mapObjects, tempInputDir);
+        localCtrl.update(avatar, deltaTime, environmentRef.current.mapObjects, tempInputDir);
 
         // 카메라 추적
         tempVector.copy(avatar.group.position).add(cameraOffset);
@@ -92,7 +94,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
               x: Math.round(avatar.group.position.x * 100),
               y: Math.round(avatar.group.position.z * 100),
               direction: avatar.group.rotation.y.toFixed(2),
-              role: role.toUpperCase(), roomId: "1"
+              role: role.toUpperCase(), roomId: ROOM_ID,
             });
             lastNetSync = now;
             lastSentPosition.copy(avatar.group.position);
@@ -102,9 +104,7 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
 
       // (2) 다른 플레이어 보간
       otherAvatarsRef.current.forEach((other) => {
-        const oldPos = other.group.position.clone();
-        other.lerpToTarget(0.2);
-        other.updateAnimation(elapsedTime, other.group.position.distanceToSquared(oldPos) > 0.0004);
+        remoteCtrl.update(other, deltaTime, 12);
       });
 
       rendererRef.current!.render(sceneRef.current!, cameraRef.current!);
@@ -116,8 +116,6 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     // 3. 소켓 연결 (순서 보장 로직 유지)
     let unsubscribeTopic: (() => void) | undefined;
     let unsubscribePrivate: (() => void) | undefined;
-
-    const ROOM_ID = "1";
 
     socketService.connect(
         '/ws-snowpeak',
@@ -166,21 +164,39 @@ const GameContainer: React.FC<GameContainerProps> = ({ nickname, role }) => {
     );
 
     return () => {
+      const scene = sceneRef.current; // <- 여기 (cleanup 맨 위)
+
+      // if (environmentRef.current) {
+      //
+      //   environmentRef.current.loadMap({ init:()=>{}, update:()=>{}, dispose:()=>{} } as any); // null 처리 혹은 dispose 호출
+      // }
+
+      cancelAnimationFrame(requestRef.current);
       activeRef.current = false;
-
-      if (environmentRef.current) {
-
-        environmentRef.current.loadMap({ init:()=>{}, update:()=>{}, dispose:()=>{} } as any); // null 처리 혹은 dispose 호출
-      }
-
 
       if (unsubscribeTopic) unsubscribeTopic();
       if (unsubscribePrivate) unsubscribePrivate();
       
-      cancelAnimationFrame(requestRef.current);
       // renderer dispose는 useThreeScene에서 처리함
+
+      // 내 아바타 제거
+      if (myAvatarRef.current && scene) {
+        scene.remove(myAvatarRef.current.group);
+        myAvatarRef.current.dispose?.();
+        myAvatarRef.current = null;
+      }
+
+      // 다른 아바타 제거
+      if (scene) {
+        otherAvatarsRef.current.forEach((av) => {
+          scene.remove(av.group);
+          av.dispose?.();
+        });
+        otherAvatarsRef.current.clear();
+      }
+
     };
-  }, [nickname, role, handleIncomingUpdate]); // 의존성 배열 최소화
+  }, [nickname, role, handleIncomingUpdate, localCtrl, remoteCtrl]); // 의존성 배열 최소화
 
   return <div ref={mountRef} className="w-full h-screen touch-none outline-none" />;
 };
