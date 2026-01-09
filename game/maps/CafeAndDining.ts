@@ -16,7 +16,7 @@ export class CafeAndDining extends BaseGameMap {
     const { mesh: floor, texture: floorTex } = buildFloor({
       sizeX: this.FLOOR_SIZE_X,
       sizeZ: this.FLOOR_SIZE_Z,
-      tileWorldSize: 2,
+      tileWorldSize: 20,
     });
     this.addMesh(floor);
     this.trackTexture(floorTex);
