@@ -1,10 +1,6 @@
 import * as THREE from "three";
 import { IGameMap } from "../IGameMap";
-
-type DisposableItem =
-  | { kind: "mesh"; obj: THREE.Mesh }
-  | { kind: "light"; obj: THREE.Light }
-  | { kind: "texture"; obj: THREE.Texture };
+import { DisposableItem, disposeLight, disposeMesh, disposeTexture } from "./Disposables";
 
 export abstract class BaseGameMap implements IGameMap {
   protected scene: THREE.Scene | null = null;
@@ -28,30 +24,9 @@ export abstract class BaseGameMap implements IGameMap {
     if (!this.scene) return;
 
     for (const item of this.disposables) {
-      if (item.kind === "mesh") {
-        const mesh = item.obj;
-        this.scene.remove(mesh);
-
-        mesh.geometry.dispose();
-        if (Array.isArray(mesh.material)) {
-          mesh.material.forEach((m) => m.dispose());
-        } else {
-          mesh.material.dispose();
-        }
-
-        const idx = this.mapObjects.indexOf(mesh);
-        if (idx > -1) this.mapObjects.splice(idx, 1);
-      }
-
-      if (item.kind === "light") {
-        const light = item.obj;
-        this.scene.remove(light);
-        if (light.shadow?.map) light.shadow.map.dispose();
-      }
-
-      if (item.kind === "texture") {
-        item.obj.dispose();
-      }
+      if (item.kind === "mesh") disposeMesh(this.scene, item.obj, this.mapObjects);
+      if (item.kind === "light") disposeLight(this.scene, item.obj);
+      if (item.kind === "texture") disposeTexture(item.obj);
     }
 
     this.disposables = [];
@@ -60,21 +35,21 @@ export abstract class BaseGameMap implements IGameMap {
 
   protected addMesh(mesh: THREE.Mesh, opts?: { collide?: boolean }) {
     if (!this.scene) return;
+
     this.scene.add(mesh);
     this.disposables.push({ kind: "mesh", obj: mesh });
 
-    if (opts?.collide) {
-      this.mapObjects.push(mesh);
-    }
+    if (opts?.collide) this.mapObjects.push(mesh);
   }
 
   protected addLight(light: THREE.Light) {
     if (!this.scene) return;
+
     this.scene.add(light);
     this.disposables.push({ kind: "light", obj: light });
   }
 
-  protected addTexture(tex: THREE.Texture) {
+  protected trackTexture(tex: THREE.Texture) {
     this.disposables.push({ kind: "texture", obj: tex });
   }
 
