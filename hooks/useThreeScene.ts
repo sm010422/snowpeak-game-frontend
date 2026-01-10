@@ -54,7 +54,7 @@ export const useThreeScene = () => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(initW, initH, false);
 
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = false;
 
     mountEl.appendChild(renderer.domElement);
 
