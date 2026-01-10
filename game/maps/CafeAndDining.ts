@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BaseGameMap } from "./base/BaseGameMap";
 import { buildFloor } from "./builders/FloorBuilder";
 import { buildWallMesh } from "./builders/WallBuilder";
+import { buildTable } from "./builders/TableBuilder";
 import { createWallMaterials, WALL_TYPES } from "./rendering/materials/materialFactory";
 
 export class CafeAndDining extends BaseGameMap {
@@ -22,6 +23,8 @@ export class CafeAndDining extends BaseGameMap {
     this.trackTexture(floorTex);
 
     this.createWalls();
+
+    this.createTables();
   }
 
   private setupLighting(): void {
@@ -35,9 +38,9 @@ export class CafeAndDining extends BaseGameMap {
     const dir = new THREE.DirectionalLight(0xffffff, 0.8);
     dir.position.set(50, 100, 50);
     dir.castShadow = true;
-    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.mapSize.set(512, 512);
 
-    const d = 60;
+    const d = 45;
     dir.shadow.camera.left = -d;
     dir.shadow.camera.right = d;
     dir.shadow.camera.top = d;
@@ -80,6 +83,22 @@ export class CafeAndDining extends BaseGameMap {
       });
 
       this.addMesh(wall, { collide: true });
+    }
+  }
+
+  private createTables(): void {
+    if (!this.scene) return;
+
+    const tables = [
+      { x: 0, z: 10, width: 2.4, depth: 1.2 },
+      { x: -10, z: 10, width: 2.0, depth: 1.0 },
+      { x: 10, z: 10, width: 2.0, depth: 1.0 },
+    ];
+
+    for (const t of tables) {
+      const { mesh, collider } = buildTable(t);
+      this.addMesh(mesh);                 // 시각용
+      this.addMesh(collider, { collide: true }); // 충돌용만 collide
     }
   }
 }
